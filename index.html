@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plataforma HT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --carbon:#0C1E26;
+  --petroleo:#143440;
+  --acero:#5F7681;
+  --acero-claro:#9DAEB6;
+  --concreto:#E3E1DA;
+  --niebla:#F5F4F0;
+  --senal:#F2B705;
+  --senal-honda:#7A5C02;
+  --alerta:#BF3E22;
+  --ok:#1D7A54;
+  --r:3px;
+  --sans:'Archivo',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  font-variation-settings:'wdth' 100;
+  background:var(--niebla);
+  color:var(--carbon);
+  font-size:16px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.cinta{height:6px;background:repeating-linear-gradient(-45deg,var(--senal) 0 14px,var(--carbon) 14px 28px)}
+.eyebrow{
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--acero);
+}
+.mono{font-family:var(--mono)}
+button{font:inherit;cursor:pointer;border:none}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--senal);outline-offset:2px}
+
+/* ---------- acceso ---------- */
+#acceso{min-height:100%;display:grid;place-items:center;padding:24px;background:var(--petroleo)}
+.placa{
+  width:100%;max-width:420px;background:var(--niebla);
+  border:1px solid var(--carbon);border-radius:var(--r);overflow:hidden;
+}
+.placa-cuerpo{padding:32px}
+.marca{
+  font-variation-settings:'wdth' 120;font-weight:700;font-size:34px;
+  letter-spacing:-.01em;line-height:1;text-transform:uppercase;
+}
+.marca span{color:var(--acero)}
+.placa .eyebrow{margin-top:10px;display:block}
+label{display:block;margin-top:20px}
+.lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--acero);display:block;margin-bottom:6px}
+input{
+  width:100%;padding:11px 12px;font:inherit;font-family:var(--mono);font-size:14px;
+  background:#fff;border:1px solid var(--concreto);border-radius:var(--r);color:var(--carbon);
+}
+input:focus{border-color:var(--carbon);outline:none;box-shadow:0 0 0 3px rgba(242,183,5,.35)}
+.btn{
+  width:100%;margin-top:24px;padding:13px;border-radius:var(--r);
+  background:var(--carbon);color:var(--niebla);font-weight:600;
+  font-variation-settings:'wdth' 110;letter-spacing:.02em;
+  transition:background .15s ease;
+}
+.btn:hover{background:var(--petroleo)}
+.btn[disabled]{opacity:.5;cursor:progress}
+.aviso{
+  margin-top:18px;padding:11px 12px;border-left:3px solid var(--alerta);
+  background:#fff;font-size:14px;color:var(--alerta);border-radius:0;
+}
+.aviso.ok{border-color:var(--ok);color:var(--ok)}
+.aviso:empty{display:none}
+
+/* ---------- aplicación ---------- */
+#app{display:none;min-height:100%;flex-direction:column}
+header{background:var(--carbon);color:var(--niebla)}
+.barra{
+  max-width:1120px;margin:0 auto;padding:18px 24px;
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+}
+.barra .marca{font-size:21px;color:var(--niebla)}
+.barra .marca span{color:var(--senal)}
+.quien{margin-left:auto;text-align:right;line-height:1.35}
+.quien b{font-weight:600;font-size:14px}
+.quien .eyebrow{color:var(--acero-claro)}
+.salir{
+  background:transparent;color:var(--acero-claro);border:1px solid var(--acero);
+  padding:7px 14px;border-radius:var(--r);font-size:13px;
+}
+.salir:hover{color:var(--niebla);border-color:var(--niebla)}
+main{max-width:1120px;margin:0 auto;padding:36px 24px 64px;width:100%;flex:1}
+h2{
+  font-size:13px;font-family:var(--mono);letter-spacing:.16em;text-transform:uppercase;
+  color:var(--acero);font-weight:400;margin:0 0 14px;
+}
+section+section{margin-top:44px}
+
+.cifras{display:flex;gap:36px;flex-wrap:wrap;padding-bottom:8px}
+.cifra .n{font-family:var(--mono);font-size:30px;font-weight:500;line-height:1}
+.cifra .t{font-size:13px;color:var(--acero)}
+
+.bahias{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.bahia{
+  position:relative;background:#fff;border:1px solid var(--concreto);
+  border-left:5px solid var(--acero);border-radius:var(--r);
+  padding:18px 18px 16px;text-align:left;width:100%;
+  transition:border-color .15s ease,transform .15s ease;
+}
+.bahia:hover{border-color:var(--acero);transform:translateY(-1px)}
+.bahia[data-nivel="admin"]{border-left-color:var(--carbon)}
+.bahia[data-nivel="escritura"]{border-left-color:var(--senal)}
+.bahia[data-nivel="lectura"]{border-left-color:var(--acero-claro)}
+.bahia h3{font-size:17px;font-weight:600;font-variation-settings:'wdth' 108;margin-bottom:4px}
+.bahia .estado{font-size:13px;color:var(--acero);margin-top:8px;display:block}
+.sello{
+  position:absolute;top:16px;right:16px;font-family:var(--mono);
+  font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--senal-honda);background:#FCF3D6;padding:2px 6px;border-radius:2px;
+}
+.bahia[data-nivel="lectura"] .sello{color:var(--acero);background:var(--concreto)}
+.bahia[data-nivel="admin"] .sello{color:var(--niebla);background:var(--carbon)}
+
+.buscador{display:flex;gap:10px;flex-wrap:wrap;max-width:520px}
+.buscador input{flex:1;min-width:200px;text-transform:uppercase}
+.buscador button{
+  padding:11px 20px;background:var(--carbon);color:var(--niebla);
+  border-radius:var(--r);font-weight:600;font-size:14px;
+}
+.resultados{margin-top:18px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px;background:#fff}
+th{
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--acero);font-weight:400;text-align:left;padding:9px 12px;
+  border-bottom:1px solid var(--carbon);white-space:nowrap;
+}
+td{padding:10px 12px;border-bottom:1px solid var(--concreto);white-space:nowrap}
+td.niv{font-family:var(--mono);font-size:13px}
+tr:hover td{background:var(--niebla)}
+.vacio{padding:22px 0;color:var(--acero);font-size:14px}
+
+@media (max-width:560px){
+  .barra{padding:16px}
+  main{padding:26px 16px 48px}
+  .quien{margin-left:0;text-align:left;width:100%;order:3}
+  .cifras{gap:24px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+
+<div id="acceso">
+  <div class="placa">
+    <div class="cinta"></div>
+    <div class="placa-cuerpo">
+      <div class="marca">Plataforma <span>HT</span></div>
+      <span class="eyebrow">Control de flota · Acceso interno</span>
+
+      <label>
+        <span class="lbl">Correo</span>
+        <input id="correo" type="email" autocomplete="username" spellcheck="false">
+      </label>
+      <label>
+        <span class="lbl">Contraseña</span>
+        <input id="clave" type="password" autocomplete="current-password">
+      </label>
+
+      <button class="btn" id="entrar">Entrar</button>
+      <p class="aviso" id="avisoAcceso" role="status"></p>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="cinta"></div>
+    <div class="barra">
+      <div class="marca">Plataforma <span>HT</span></div>
+      <div class="quien">
+        <b id="nombreUsuario">—</b><br>
+        <span class="eyebrow" id="rolUsuario"></span>
+      </div>
+      <button class="salir" id="salir">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="secResumen">
+      <h2>Parque registrado</h2>
+      <div class="cifras" id="cifras"></div>
+    </section>
+
+    <section>
+      <h2>Tus módulos</h2>
+      <div class="bahias" id="modulos"></div>
+    </section>
+
+    <section id="secConsulta">
+      <h2>Consulta de equipos</h2>
+      <div class="buscador">
+        <input id="q" placeholder="NIV, placa o cliente" spellcheck="false">
+        <button id="buscar">Buscar</button>
+      </div>
+      <div class="resultados" id="resultados"></div>
+    </section>
+  </main>
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// ---------------------------------------------------------------
+// CONFIGURACIÓN — sustituye estos dos valores por los de tu proyecto.
+// Están en Supabase > Settings > API.
+// La llave anónima es pública por diseño: quien protege los datos es
+// Row Level Security, no el secreto de esta cadena.
+// ---------------------------------------------------------------
+const SUPABASE_URL  = 'https://ahfjstuwekcuxshclprl.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZmpzdHV3ZWtjdXhzaGNscHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNDg2MjYsImV4cCI6MjEwMzYyNDYyNn0.lf1uw8WHPRy21GuYlK9NzeI5JgJK2be1LrODq22CodM';
+
+const db = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  db: { schema: 'core' }
+});
+
+const $ = id => document.getElementById(id);
+const acceso = $('acceso'), app = $('app'), aviso = $('avisoAcceso');
+
+const DESTINOS = {
+  clientes:    { nombre:'Servicio a Clientes',      url:null },
+  documentos:  { nombre:'Documentos y expedientes', url:null },
+  patios:      { nombre:'Levantamiento de patios',  url:null },
+  operaciones: { nombre:'Operaciones y taller',     url:null },
+  fotos:       { nombre:'Imágenes HT',              url:null },
+  admin:       { nombre:'Administración',           url:null }
+};
+
+function mostrarAviso(txt, ok=false){
+  aviso.textContent = txt;
+  aviso.classList.toggle('ok', ok);
+}
+
+// ---------------- acceso ----------------
+async function entrar(){
+  const correo = $('correo').value.trim();
+  const clave  = $('clave').value;
+  if(!correo || !clave){ mostrarAviso('Escribe tu correo y tu contraseña.'); return; }
+
+  $('entrar').disabled = true;
+  mostrarAviso('');
+  const { error } = await db.auth.signInWithPassword({ email: correo, password: clave });
+  $('entrar').disabled = false;
+
+  if(error){
+    mostrarAviso(error.message.includes('Invalid')
+      ? 'Ese correo y contraseña no coinciden. Revísalos e inténtalo otra vez.'
+      : 'No se pudo entrar: ' + error.message);
+    return;
+  }
+  await abrirSesion();
+}
+
+async function salir(){
+  await db.auth.signOut();
+  app.style.display = 'none';
+  acceso.style.display = 'grid';
+  $('clave').value = '';
+}
+
+// ---------------- sesión ----------------
+async function abrirSesion(){
+  const { data:{ user } } = await db.auth.getUser();
+  if(!user) return;
+
+  acceso.style.display = 'none';
+  app.style.display = 'flex';
+
+  const { data: perfil } = await db.from('perfiles')
+    .select('nombre').eq('id', user.id).maybeSingle();
+  $('nombreUsuario').textContent = perfil?.nombre || user.email;
+
+  const { data: roles } = await db.from('perfil_roles')
+    .select('rol').eq('perfil_id', user.id);
+  $('rolUsuario').textContent = (roles||[]).map(r=>r.rol.replace(/_/g,' ')).join(' · ');
+
+  await Promise.all([cargarModulos(), cargarCifras()]);
+}
+
+async function cargarModulos(){
+  const cont = $('modulos');
+  const { data, error } = await db.from('v_mis_modulos').select('*');
+
+  if(error){
+    cont.innerHTML = `<p class="vacio">No se pudieron leer tus módulos: ${error.message}</p>`;
+    return;
+  }
+  if(!data || !data.length){
+    cont.innerHTML = `<p class="vacio">Todavía no tienes módulos asignados. Pídele a un administrador que te dé un rol.</p>`;
+    return;
+  }
+
+  cont.innerHTML = data.map(m => {
+    const d = DESTINOS[m.clave] || { nombre:m.nombre, url:null };
+    const estado = d.url ? 'Abrir módulo' : 'En construcción';
+    const tag = d.url ? 'a' : 'button';
+    const attr = d.url ? `href="${d.url}"` : 'type="button" disabled style="opacity:.72;cursor:default"';
+    return `<${tag} class="bahia" data-nivel="${m.nivel}" ${attr}>
+      <span class="sello">${m.nivel}</span>
+      <h3>${d.nombre}</h3>
+      <span class="estado">${estado}</span>
+    </${tag}>`;
+  }).join('');
+}
+
+async function cargarCifras(){
+  const cont = $('cifras');
+  const [eq, pa, fo] = await Promise.all([
+    db.from('equipos').select('*', { count:'exact', head:true }).eq('activo', true),
+    db.from('patios').select('*',  { count:'exact', head:true }).eq('activo', true),
+    db.from('fotos').select('*',   { count:'exact', head:true })
+  ]);
+
+  if(eq.error){
+    cont.innerHTML = `<p class="vacio">No se pudo leer el parque: ${eq.error.message}</p>`;
+    $('secResumen').querySelector('h2').textContent = 'Parque registrado';
+    return;
+  }
+  const fmt = n => (n ?? 0).toLocaleString('es-MX');
+  cont.innerHTML = `
+    <div class="cifra"><div class="n">${fmt(eq.count)}</div><div class="t">equipos activos</div></div>
+    <div class="cifra"><div class="n">${fmt(pa.count)}</div><div class="t">patios</div></div>
+    <div class="cifra"><div class="n">${fmt(fo.count)}</div><div class="t">fotos</div></div>`;
+}
+
+// ---------------- consulta ----------------
+async function buscar(){
+  const q = $('q').value.trim();
+  const caja = $('resultados');
+  if(q.length < 3){
+    caja.innerHTML = `<p class="vacio">Escribe al menos tres caracteres.</p>`;
+    return;
+  }
+  caja.innerHTML = `<p class="vacio">Buscando…</p>`;
+
+  const patron = `%${q}%`;
+  const { data, error } = await db.from('v_equipos')
+    .select('niv,placa,tipo,marca,anio,patio_registrado,estatus_operativo,cliente_actual,ubicacion_discrepante')
+    .or(`niv.ilike.${patron},placa.ilike.${patron},cliente_actual.ilike.${patron}`)
+    .limit(50);
+
+  if(error){ caja.innerHTML = `<p class="vacio">La búsqueda falló: ${error.message}</p>`; return; }
+  if(!data.length){ caja.innerHTML = `<p class="vacio">Ningún equipo coincide con “${q}”.</p>`; return; }
+
+  caja.innerHTML = `<table>
+    <thead><tr>
+      <th>NIV</th><th>Placa</th><th>Tipo</th><th>Marca</th><th>Año</th>
+      <th>Patio</th><th>Estatus</th><th>Cliente</th>
+    </tr></thead><tbody>${
+      data.map(e=>`<tr>
+        <td class="niv">${e.niv||''}</td>
+        <td class="niv">${e.placa||'—'}</td>
+        <td>${e.tipo||'—'}</td>
+        <td>${e.marca||'—'}</td>
+        <td class="niv">${e.anio||'—'}</td>
+        <td>${e.patio_registrado||'—'}${e.ubicacion_discrepante?' <span class="sello">ubicación distinta</span>':''}</td>
+        <td>${e.estatus_operativo||'—'}</td>
+        <td>${e.cliente_actual||'—'}</td>
+      </tr>`).join('')
+    }</tbody></table>
+    <p class="vacio">${data.length === 50 ? 'Mostrando los primeros 50. Afina la búsqueda para ver menos.' : data.length + ' resultado(s).'}</p>`;
+}
+
+// ---------------- arranque ----------------
+$('entrar').addEventListener('click', entrar);
+$('salir').addEventListener('click', salir);
+$('buscar').addEventListener('click', buscar);
+$('clave').addEventListener('keydown', e => { if(e.key==='Enter') entrar(); });
+$('correo').addEventListener('keydown', e => { if(e.key==='Enter') $('clave').focus(); });
+$('q').addEventListener('keydown', e => { if(e.key==='Enter') buscar(); });
+
+const { data:{ session } } = await db.auth.getSession();
+if(session) await abrirSesion();
+</script>
+</body>
+</html>
