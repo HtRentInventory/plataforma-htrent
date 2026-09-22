@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autorización de gastos y facturas · Plataforma HT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira:ital,wght@1,700;1,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ht.css">
+</head>
+<body>
+
+<header>
+  <div class="cinta"></div>
+  <div class="barra">
+    <div class="marca">Plataforma <span>HT</span></div>
+    <div class="rotulo"><b>HT RENT &gt;</b><span>ARRENDA Y CRECE</span></div>
+    <div class="quien">
+      <b id="nombreUsuario">—</b><br>
+      <span class="eyebrow" id="puestoUsuario"></span>
+    </div>
+    <button class="salir" id="salir">Salir</button>
+  </div>
+</header>
+
+<main>
+  <a class="migaja" href="index.html">← Volver a módulos</a>
+  <h1>Autorización de gastos y facturas</h1>
+  <span class="eyebrow">Operaciones · corte lunes y miércoles a las 12:00</span>
+
+  <div id="franja"></div>
+
+  <section>
+    <h2>Resumen</h2>
+    <div class="cifras" id="cifras"></div>
+  </section>
+
+  <section>
+    <div class="pestanas" role="tablist">
+      <button class="pestana" role="tab" data-tab="pend">Por atender<span class="c" id="cPend">0</span></button>
+      <button class="pestana" role="tab" data-tab="mias">Mis solicitudes<span class="c" id="cMias">0</span></button>
+      <button class="pestana" role="tab" data-tab="todas">Todas<span class="c" id="cTodas">0</span></button>
+      <button class="btn chico" id="nueva" style="margin-left:auto;margin-bottom:6px">+ Nueva solicitud</button>
+    </div>
+    <div class="filtros">
+      <input id="q" placeholder="Folio, concepto, proveedor, factura o NIV" spellcheck="false">
+      <select id="fTipo"><option value="">Facturas y gastos</option><option value="factura">Solo facturas</option><option value="gasto">Solo gastos</option></select>
+      <select id="fEstado"><option value="">Todos los estatus</option><option value="en_proceso">En autorización</option><option value="devuelta">Devuelta</option><option value="autorizada">Autorizada, en lote</option><option value="enviada">Enviada a pagos</option><option value="rechazada">Rechazada</option><option value="cancelada">Cancelada</option></select>
+    </div>
+    <div class="resultados" id="lista"><p class="cargando">Cargando solicitudes…</p></div>
+  </section>
+</main>
+
+<div class="telon" id="telon"></div>
+<aside class="panel" id="panel" aria-hidden="true">
+  <div class="panel-cab"><h3 id="panelTitulo"></h3><button class="cerrar" id="cerrar" aria-label="Cerrar">×</button></div>
+  <div class="panel-cuerpo" id="panelCuerpo"></div>
+  <div id="panelPie"></div>
+</aside>
+<div class="nota" id="nota" role="status"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL  = 'https://ahfjstuwekcuxshclprl.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZmpzdHV3ZWtjdXhzaGNscHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNDg2MjYsImV4cCI6MjEwMzYyNDYyNn0.lf1uw8WHPRy21GuYlK9NzeI5JgJK2be1LrODq22CodM';
+const BUCKET = 'gastos-adjuntos';
+
+const core = createClient(SUPABASE_URL, SUPABASE_ANON, { db:{ schema:'core' } });
+const g = core.schema('gastos');
+
+/* cortes de envío: 1 = lunes, 3 = miércoles, 12:00, pago al día siguiente */
+const CORTES = [{dia:1,hora:12,min:0,diasPago:1},{dia:3,hora:12,min:0,diasPago:1}];
+const TIPOS_GASTO = ['Movimiento entre patios','Reparación o mantenimiento','Gestoría y trámites','Verificaciones y permisos','Estadía en patio','Refacciones','Viáticos','Otro'];
+const ESTADOS = {en_proceso:'En autorización',devuelta:'Devuelta',autorizada:'Autorizada, en lote',enviada:'Enviada a pagos',rechazada:'Rechazada',cancelada:'Cancelada'};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN'}).format(Number(n)||0);
+const fDia = d => d ? new Date(String(d).length===10 ? d+'T12:00:00' : d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const fLargo = d => d ? new Date(String(d).length===10 ? d+'T12:00:00' : d).toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'}) : '—';
+const fHora = d => d ? new Date(d).toLocaleString('es-MX',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+const kb = n => n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
+const parseNivs = t => [...new Set(String(t||'').toUpperCase().split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))];
+function nota(t){ const n=$('nota'); n.textContent=t; n.classList.add('on'); clearTimeout(nota._t); nota._t=setTimeout(()=>n.classList.remove('on'),4000); }
+
+const estado = { yo:null, lista:[], personas:{}, tab:'pend', q:'', fTipo:'', fEstado:'', abierto:null, catalogo:{} };
+
+/* ---------------- arranque ---------------- */
+const { data:{ session } } = await core.auth.getSession();
+if(!session){ location.href = 'index.html'; }
+const usuario = session.user;
+
+const { data: perfil } = await core.from('perfiles').select('nombre,puesto').eq('id', usuario.id).maybeSingle();
+$('nombreUsuario').textContent = perfil?.nombre || usuario.email;
+$('puestoUsuario').textContent = perfil?.puesto || '';
+estado.yo = { id: usuario.id, nombre: perfil?.nombre || usuario.email, puesto: perfil?.puesto || '' };
+
+const { data: gente } = await g.from('v_personas').select('id,nombre,puesto');
+(gente||[]).forEach(p => estado.personas[p.id] = p);
+estado.personas[usuario.id] ??= estado.yo;
+
+/* ---------------- datos ---------------- */
+const nombreDe = id => estado.personas[id]?.nombre || 'Autorizador';
+const puestoDe = id => estado.personas[id]?.puesto || '';
+
+async function cargar(){
+  const { data, error } = await g.from('solicitudes')
+    .select('*, lote:lotes(corte,fecha_pago), historial(id,accion,usuario,usuario_id,comentario,tipo,fecha), adjuntos(id,clase,nombre,ruta,tam_bytes)')
+    .order('creado', { ascending:false });
+  if(error){ $('lista').innerHTML = `<p class="vacio">No se pudieron leer las solicitudes: ${esc(error.message)}</p>`; return; }
+  estado.lista = (data||[]).map(s => ({...s, historial:(s.historial||[]).sort((a,b)=>a.fecha.localeCompare(b.fecha))}));
+  pintar();
+  if(estado.abierto?.tipo==='detalle'){
+    const s = estado.lista.find(x=>x.id===estado.abierto.id);
+    if(s) verDetalle(s);
+  }
+}
+
+const turnoDe = s => s.estado==='en_proceso' ? (s.cadena||[])[s.paso] : (s.estado==='devuelta' ? s.solicitante_id : null);
+const esMiTurno = s => s.estado==='en_proceso' && (s.cadena||[])[s.paso] === estado.yo.id;
+const pendienteMia = s => esMiTurno(s) || (s.estado==='devuelta' && s.solicitante_id===estado.yo.id);
+const diasEspera = s => { const h=s.historial?.[s.historial.length-1]; return h ? (Date.now()-new Date(h.fecha))/864e5 : 0; };
+
+function siguienteCorte(desde){
+  const d0 = new Date(desde); let mejor=null;
+  for(let i=0;i<=8;i++) for(const c of CORTES){
+    const d=new Date(d0); d.setDate(d0.getDate()+i); d.setHours(c.hora,c.min,0,0);
+    if(d.getDay()===c.dia && d>=d0 && (!mejor || d<mejor.envio)){
+      const pago=new Date(d); pago.setDate(d.getDate()+c.diasPago); mejor={envio:d,pago};
+    }
+  }
+  return mejor;
+}
+function loteDe(s){
+  if(s.lote_id && s.lote) return {envio:new Date(s.lote.corte), pago:new Date(s.lote.fecha_pago)};
+  const base = new Date(Math.max(new Date(s.creado).getTime(), new Date(s.autorizado_en||Date.now()).getTime()));
+  return siguienteCorte(base);
+}
+
+/* ---------------- lista ---------------- */
+function visibles(){
+  let l = [...estado.lista];
+  if(estado.tab==='pend') l = l.filter(pendienteMia).sort((a,b)=>diasEspera(b)-diasEspera(a));
+  if(estado.tab==='mias') l = l.filter(s=>s.solicitante_id===estado.yo.id);
+  if(estado.fTipo) l = l.filter(s=>s.tipo===estado.fTipo);
+  if(estado.fEstado) l = l.filter(s=>s.estado===estado.fEstado);
+  const q = estado.q.trim().toLowerCase();
+  if(q) l = l.filter(s => [s.folio,s.concepto,s.proveedor,s.rfc,s.factura_numero,s.factura_uuid,s.gasto_tipo,s.solicitante_nombre,...(s.nivs||[])].join(' ').toLowerCase().includes(q));
+  return l;
+}
+
+function pintar(){
+  const L = estado.lista;
+  const pend = L.filter(pendienteMia);
+  $('cPend').textContent = pend.length;
+  $('cMias').textContent = L.filter(s=>s.solicitante_id===estado.yo.id).length;
+  $('cTodas').textContent = L.length;
+  document.querySelectorAll('.pestana').forEach(t=>t.setAttribute('aria-selected', t.dataset.tab===estado.tab));
+
+  if(pend.length){
+    const viejo = Math.max(...pend.map(diasEspera));
+    $('franja').innerHTML = `<div class="franja"><p>Tienes <b>${pend.length}</b> ${pend.length===1?'solicitud':'solicitudes'} esperando tu acción. La más antigua lleva ${viejo<1?'menos de un día':Math.floor(viejo)+(Math.floor(viejo)===1?' día':' días')}.</p><button class="btn senal chico" id="irPend">Revisar</button></div>`;
+    $('irPend').onclick = () => { estado.tab='pend'; pintar(); };
+  } else $('franja').innerHTML = '';
+
+  const enProc = L.filter(s=>s.estado==='en_proceso');
+  const enLote = L.filter(s=>s.estado==='autorizada');
+  const prox = siguienteCorte(new Date());
+  const fmt = n => (n??0).toLocaleString('es-MX');
+  $('cifras').innerHTML = `
+    <div class="cifra${pend.length?' urge':''}"><div class="n">${fmt(pend.length)}</div><div class="t">esperan tu acción</div></div>
+    <div class="cifra"><div class="n">${fmt(enProc.length)}</div><div class="t">en autorización</div></div>
+    <div class="cifra"><div class="n">${money(enProc.reduce((a,s)=>a+Number(s.total||0),0))}</div><div class="t">monto en proceso</div></div>
+    <div class="cifra"><div class="n">${fmt(enLote.length)}</div><div class="t">listas para el envío del ${fDia(prox.envio)}</div></div>`;
+
+  const filas = visibles();
+  if(!filas.length){
+    const msg = estado.tab==='pend' ? 'Nada pendiente por ahora.' : (L.length ? 'Ninguna solicitud coincide con el filtro.' : 'Todavía no hay solicitudes registradas.');
+    $('lista').innerHTML = `<p class="vacio">${msg}</p>`;
+    return;
+  }
+  $('lista').innerHTML = `<table><thead><tr>
+      <th>Folio</th><th>Tipo</th><th>Concepto</th><th>Monto</th><th>Solicita</th><th>Turno</th>
+    </tr></thead><tbody>${filas.map(s=>{
+      const t = turnoDe(s), d = diasEspera(s);
+      const turno = t
+        ? `${esc(nombreDe(t))}<span class="sub">${d<1?'hoy':Math.floor(d)+' días'}</span>`
+        : `<span class="sello ${s.estado==='enviada'?'oscuro':s.estado==='autorizada'?'ok':s.estado==='rechazada'?'mal':'gris'}">${ESTADOS[s.estado]}</span>`;
+      return `<tr class="fila" data-id="${s.id}">
+        <td class="niv"><b>${esc(s.folio||'')}</b><span class="sub">${fDia(s.creado)}</span></td>
+        <td><span class="sello ${s.tipo==='factura'?'gris':''}">${s.tipo==='factura'?'Factura':'Gasto'}</span>${s.urgencia==='Urgente'?'<span class="sub" style="color:var(--alerta)">urgente</span>':''}</td>
+        <td>${esc(s.concepto)}<span class="sub">${esc(s.tipo==='factura' ? `${s.proveedor||''} · ${s.factura_numero||''}` : (s.gasto_tipo||''))}${(s.nivs||[]).length?` · ${s.nivs.length} NIV${s.nivs.length>1?'s':''}`:''}${(s.adjuntos||[]).length?' · con archivos':''}</span></td>
+        <td class="num">${money(s.total)}${s.estadia?.total?`<span class="sub">+ estadía ${money(s.estadia.total)}</span>`:''}</td>
+        <td>${esc(s.solicitante_nombre||'')}</td>
+        <td>${turno}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+/* ---------------- panel ---------------- */
+function abrir(){ $('panel').classList.add('on'); $('telon').classList.add('on'); $('panel').setAttribute('aria-hidden','false'); }
+function cerrar(){ $('panel').classList.remove('on'); $('telon').classList.remove('on'); $('panel').setAttribute('aria-hidden','true'); estado.abierto=null; }
+
+function rutaHTML(s){
+  const pasos = [{id:s.solicitante_id, papel:'Solicita', clase:'info', cuando:s.creado}];
+  (s.cadena||[]).forEach((u,i)=>{
+    let clase='';
+    if(i<s.paso) clase='hecho';
+    else if(i===s.paso){
+      if(s.estado==='en_proceso') clase='turno';
+      else if(s.estado==='rechazada'||s.estado==='devuelta') clase='mal';
+    }
+    if(['autorizada','enviada'].includes(s.estado)) clase='hecho';
+    const ev = [...(s.historial||[])].reverse().find(h=>h.usuario_id===u && /^Autoriz/.test(h.accion));
+    pasos.push({id:u, papel:puestoDe(u)||'Autoriza', clase, cuando: clase==='hecho'&&ev?ev.fecha:null});
+  });
+  const l = loteDe(s);
+  const enviada = s.estado==='enviada';
+  pasos.push({
+    nombre: enviada ? 'Enviada a pagos' : 'Envío a pagos',
+    papel: ['autorizada','enviada'].includes(s.estado) ? `Pago ${fDia(l.pago)}` : 'Lunes o miércoles',
+    cuandoTexto: ['autorizada','enviada'].includes(s.estado) ? fDia(l.envio) : '',
+    clase: enviada ? 'hecho' : (s.estado==='autorizada' ? 'info' : '')
+  });
+  return `<div class="chain">${pasos.map(p=>`<div class="chev ${p.clase}"><strong>${esc(p.nombre||nombreDe(p.id))}</strong>${esc(p.papel)}${p.cuando?`<br>${fDia(p.cuando)}`:(p.cuandoTexto?`<br>${esc(p.cuandoTexto)}`:'')}</div>`).join('')}</div>`;
+}
+
+async function verDetalle(s){
+  estado.abierto = {tipo:'detalle', id:s.id};
+  $('panelTitulo').textContent = `${s.folio} · ${s.tipo==='factura'?'Factura':'Gasto'}`;
+  const mio = s.solicitante_id===estado.yo.id;
+  const malo = [...(s.historial||[])].reverse().find(h=>h.tipo==='bad');
+  const e = s.estadia, l = loteDe(s), t = turnoDe(s);
+
+  let acciones = '';
+  if(esMiTurno(s)){
+    acciones = `<div class="acciones">
+        <button class="btn" data-ac="autorizar">Autorizar</button>
+        <button class="btn claro" data-ac="pedirMotivo" data-clase="devolver">Devolver para corrección</button>
+        <button class="btn alerta" data-ac="pedirMotivo" data-clase="rechazar">Rechazar</button></div>
+      <div class="motivo" id="motivo"><div class="campo"><span class="lbl" id="motivoLbl"></span><textarea id="motivoTxt" rows="3"></textarea></div>
+      <div class="acciones" style="margin-top:10px"><button class="btn alerta" data-ac="confirmarMotivo">Confirmar</button><button class="btn claro" data-ac="ocultarMotivo">Cancelar</button></div></div>`;
+  } else if(s.estado==='devuelta' && mio){
+    acciones = `<div class="acciones"><button class="btn" data-ac="corregir">Corregir y reenviar</button><button class="btn claro" data-ac="cancelar">Cancelar solicitud</button></div>`;
+  } else if(s.estado==='autorizada'){
+    acciones = `<p class="q">Autorizada. Entra en el reporte a pagos del <b>${esc(fLargo(l.envio))}</b> para pago el <b>${esc(fLargo(l.pago))}</b>.</p>`;
+  } else if(t){
+    acciones = `<p class="q">Turno de <b>${esc(nombreDe(t))}</b>${puestoDe(t)?`, ${esc(puestoDe(t))}`:''}.</p>
+      <div class="acciones" style="margin-top:10px"><button class="btn claro chico" data-ac="recordar">Copiar recordatorio</button>${mio&&s.estado==='en_proceso'?'<button class="btn claro chico" data-ac="cancelar">Cancelar solicitud</button>':''}</div>`;
+  } else {
+    acciones = `<p class="q">Solicitud ${ESTADOS[s.estado].toLowerCase()}.</p>`;
+  }
+
+  const relacionadas = (s.nivs||[]).length
+    ? estado.lista.filter(o=>o.id!==s.id && o.estado!=='cancelada' && (o.nivs||[]).some(n=>s.nivs.includes(n)))
+    : [];
+
+  $('panelCuerpo').innerHTML = `
+    ${e?.total?`<div class="bloque foco"><h3>Estadía en el patio destino</h3>
+      <div class="importes"><div><div class="g">${money(e.total)}</div><div class="t">estimado</div></div>
+      <div><div class="v">${money(e.costoDia)} por día · ${e.dias} ${Number(e.dias)===1?'día':'días'}</div><div class="t">${esc(e.destino||'patio destino')}${e.origen?` · desde ${esc(e.origen)}`:''}</div></div>
+      <div><div class="v">${money(Number(s.total)+Number(e.total))}</div><div class="t">costo total del movimiento</div></div></div></div>`:''}
+    ${malo && ['rechazada','devuelta'].includes(s.estado) ? `<div class="bloque aviso"><h3>${s.estado==='rechazada'?'Rechazada':'Devuelta'} por ${esc(malo.usuario)}</h3>
+      <p>${esc(malo.comentario||'')}</p><p class="q">${fHora(malo.fecha)}</p></div>`:''}
+
+    <div class="bloque"><h3>Ruta de autorización</h3>${rutaHTML(s)}<div style="margin-top:14px">${acciones}</div></div>
+
+    <div class="bloque">
+      <div class="importes">
+        <div><div class="g">${money(s.total)}</div><div class="t">total${s.xml_datos?' (del XML)':''}</div></div>
+        <div><div class="v">${money(s.subtotal)}</div><div class="t">subtotal</div></div>
+        <div><div class="v">${money(s.iva)}</div><div class="t">IVA ${s.iva_pct}%</div></div>
+        ${Number(s.retenciones)?`<div><div class="v">−${money(s.retenciones)}</div><div class="t">retenciones</div></div>`:''}
+        <div><span class="sello ${s.estado==='enviada'?'oscuro':s.estado==='autorizada'?'ok':s.estado==='rechazada'?'mal':'gris'}">${ESTADOS[s.estado]}</span></div>
+      </div>
+      <dl class="datos">
+        <div><dt>Concepto</dt><dd>${esc(s.concepto)}</dd></div>
+        ${s.tipo==='factura'?`
+          <div><dt>Proveedor</dt><dd>${esc(s.proveedor||'—')}${s.rfc?`<span class="sub">RFC ${esc(s.rfc)}</span>`:''}</dd></div>
+          <div><dt>No. de factura</dt><dd>${esc(s.factura_numero||'—')}</dd></div>
+          <div><dt>Fecha de factura</dt><dd>${fDia(s.factura_fecha)}</dd></div>
+          ${s.factura_uuid?`<div style="grid-column:1/-1"><dt>Folio fiscal</dt><dd class="mono">${esc(s.factura_uuid)}</dd></div>`:''}`
+        :`<div><dt>Tipo de gasto</dt><dd>${esc(s.gasto_tipo||'—')}</dd></div>${s.proveedor?`<div><dt>Proveedor</dt><dd>${esc(s.proveedor)}</dd></div>`:''}`}
+        <div><dt>Solicita</dt><dd>${esc(s.solicitante_nombre||'')}<span class="sub">${esc(s.solicitante_puesto||'')}</span></dd></div>
+        <div><dt>Fecha requerida</dt><dd>${fDia(s.fecha_requerida)}${s.urgencia==='Urgente'?' <span class="sello mal">urgente</span>':''}</dd></div>
+      </dl>
+      ${(s.adjuntos||[]).length?`<div class="archivos" style="margin-top:16px">${s.adjuntos.map(a=>`<a class="chip" href="#" data-ver="${a.id}">${a.clase==='xml'?'Ver XML':a.clase==='pdf'?'Ver PDF':'Ver soporte'}<small>${esc(a.nombre)}${a.tam_bytes?`, ${kb(a.tam_bytes)}`:''}</small></a>`).join('')}</div>`:''}
+    </div>
+
+    ${s.justificacion?`<div class="bloque"><h3>${s.tipo==='gasto'?'Justificación':'Comentarios'}</h3><p style="white-space:pre-wrap">${esc(s.justificacion)}</p></div>`:''}
+
+    ${(s.nivs||[]).length?`<div class="bloque"><h3>Unidades incluidas (${s.nivs.length})</h3>
+      <div id="nivsDetalle" class="nivs">${s.nivs.map(n=>`<span class="pieza">${esc(n)}</span>`).join('')}</div>
+      ${relacionadas.length?`<h3 style="margin-top:18px">Otras solicitudes con estas unidades</h3><ul class="linea">${relacionadas.map(o=>`<li><a href="#" data-id="${o.id}" class="t">${esc(o.folio)}</a> ${esc(o.concepto)} <span class="mono">${money(o.total)}</span> <span class="sello gris">${ESTADOS[o.estado]}</span></li>`).join('')}</ul>`:''}
+    </div>`:''}
+
+    <div class="bloque"><h3>Historial</h3><ul class="linea">${(s.historial||[]).map(h=>`<li class="${esc(h.tipo||'')}">
+      <div class="t">${esc(h.accion)}</div>
+      <div class="m">${esc(h.usuario)} · ${fHora(h.fecha)}</div>
+      ${h.comentario?`<div class="c">${esc(h.comentario)}</div>`:''}</li>`).join('')}</ul></div>`;
+  $('panelPie').innerHTML = '';
+  abrir();
+  if((s.nivs||[]).length) pintarNivsDetalle(s.nivs);
+}
+
+async function pintarNivsDetalle(nivs){
+  const info = await validarNivs(nivs);
+  const cont = $('nivsDetalle'); if(!cont) return;
+  cont.innerHTML = nivs.map(n=>{
+    const i = info[n];
+    const clase = !i ? '' : i.existe ? 'ok' : 'no';
+    const pie = !i ? '' : i.existe ? esc([i.patio,i.tipo].filter(Boolean).join(' · ')) : 'no está en el inventario';
+    return `<span class="pieza ${clase}">${esc(n)}${pie?`<small>${pie}</small>`:''}</span>`;
+  }).join('');
+}
+
+async function validarNivs(nivs){
+  const faltan = nivs.filter(n=>!(n in estado.catalogo));
+  if(faltan.length){
+    const { data } = await g.rpc('validar_nivs', { p_nivs: faltan });
+    (data||[]).forEach(r => estado.catalogo[r.niv] = r);
+    faltan.forEach(n => estado.catalogo[n] ??= null);
+  }
+  const out = {}; nivs.forEach(n => out[n] = estado.catalogo[n]); return out;
+}
+
+/* ---------------- formulario ---------------- */
+let tipoForm='factura', editando=null, xmlDatos=null, archivos={pdf:null,xml:null,xmlTexto:null};
+
+function nuevaSolicitud(src){
+  editando = src || null;
+  tipoForm = src?.tipo || tipoForm;
+  if(!src){ xmlDatos=null; archivos={pdf:null,xml:null,xmlTexto:null}; }
+  const s = src || {};
+  if(src) xmlDatos = src.xml_datos || null;
+  estado.abierto = {tipo:'forma'};
+  $('panelTitulo').textContent = editando ? `Corregir ${editando.folio}` : 'Nueva solicitud';
+  const ivaOpc = [16,12,8,0];
+  const ivaSel = s.iva_pct==null ? 16 : (ivaOpc.includes(Number(s.iva_pct)) ? Number(s.iva_pct) : 'otro');
+  const e = s.estadia || {};
+  $('panelCuerpo').innerHTML = `
+    <div class="segmento" role="group">
+      <button type="button" data-ac="tipo" data-v="factura" aria-pressed="${tipoForm==='factura'}">Pago de factura</button>
+      <button type="button" data-ac="tipo" data-v="gasto" aria-pressed="${tipoForm==='gasto'}">Autorización de gasto</button>
+    </div>
+    <div class="bloque"><h3>${tipoForm==='factura'?'Archivos de la factura':'Soporte del gasto'}</h3>
+      <div class="campos">
+        ${tipoForm==='factura'?`<label class="soltar" id="cajaXml"><input type="file" id="upXml" accept=".xml,text/xml,application/xml"><b>XML (CFDI)</b><span>Arrastra o elige el XML. Llena número, proveedor, montos, IVA y UUID.</span></label>`:''}
+        <label class="soltar" id="cajaPdf"><input type="file" id="upPdf" accept=".pdf,application/pdf"><b>${tipoForm==='factura'?'PDF de la factura':'PDF de cotización o soporte'}</b><span>Arrastra o elige el PDF. Opcional.</span></label>
+      </div>
+      <div id="xmlAviso"></div>
+    </div>
+    <div class="bloque"><div class="campos">
+      ${tipoForm==='factura'?`
+        <div class="campo"><span class="lbl">No. de factura <i>*</i></span><input id="fNum" value="${esc(s.factura_numero)}"></div>
+        <div class="campo"><span class="lbl">Fecha de factura</span><input id="fFecha" type="date" value="${esc(s.factura_fecha)}"></div>
+        <div class="campo"><span class="lbl">Proveedor <i>*</i></span><input id="fProv" value="${esc(s.proveedor)}"></div>
+        <div class="campo"><span class="lbl">RFC del proveedor</span><input id="fRfc" value="${esc(s.rfc)}"></div>
+        <div class="campo ancho"><span class="lbl">Folio fiscal (UUID)</span><input id="fUuid" value="${esc(s.factura_uuid)}"></div>`
+      :`<div class="campo"><span class="lbl">Tipo de gasto <i>*</i></span><select id="fGTipo"><option value="">Selecciona…</option>${TIPOS_GASTO.map(t=>`<option ${s.gasto_tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
+        <div class="campo"><span class="lbl">Proveedor</span><input id="fProv" value="${esc(s.proveedor)}"></div>`}
+      <div class="campo ancho"><span class="lbl">Concepto <i>*</i></span><input id="fConc" value="${esc(s.concepto)}" placeholder="${tipoForm==='factura'?'Ej. Actualización de verificaciones fisicomecánicas':'Ej. Traslado de 3 cajas secas a Tractomundo'}"></div>
+      <div class="campo"><span class="lbl">Monto <i>*</i> <span id="candado" class="mono" style="color:var(--senal-honda)"></span></span><input id="fMonto" type="number" min="0" step="0.01" inputmode="decimal" value="${s.monto_capturado ?? s.total ?? ''}"></div>
+      <div class="campo"><span class="lbl">IVA</span><select id="fIva">${ivaOpc.map(p=>`<option value="${p}" ${ivaSel===p?'selected':''}>${p?p+'%':'Sin IVA'}</option>`).join('')}<option value="otro" ${ivaSel==='otro'?'selected':''}>Otro porcentaje</option></select></div>
+      <div class="campo" id="cajaIvaOtro" style="display:${ivaSel==='otro'?'block':'none'}"><span class="lbl">Porcentaje</span><input id="fIvaOtro" type="number" min="0" max="100" step="0.01" value="${ivaSel==='otro'?esc(s.iva_pct):''}"></div>
+      <div class="campo ancho"><label class="opcion"><input type="checkbox" id="fIncl" ${s.incluye_iva?'checked':''}> El monto capturado ya incluye IVA</label></div>
+      <div class="campo ancho"><div class="calculo" id="calculo"></div></div>
+      <div class="campo ancho" id="dupAviso"></div>
+      <div class="campo ancho"><span class="lbl">${tipoForm==='gasto'?'Justificación: ¿por qué se requiere? <i>*</i>':'Comentarios'}</span><textarea id="fJust" placeholder="${tipoForm==='gasto'?'Explica la necesidad, qué pasa si no se autoriza y el beneficio esperado':'Opcional'}">${esc(s.justificacion)}</textarea></div>
+      <div class="campo ancho"><span class="lbl">NIVs o unidades relacionadas</span><textarea id="fNivs" placeholder="Uno por renglón o separados por coma">${esc((s.nivs||[]).join('\n'))}</textarea><div class="pista" id="nivPista"></div><div class="nivs" id="nivPrevio" style="margin-top:8px"></div></div>
+      <div class="campo"><span class="lbl">Prioridad</span><select id="fUrg"><option ${s.urgencia!=='Urgente'?'selected':''}>Normal</option><option ${s.urgencia==='Urgente'?'selected':''}>Urgente</option></select></div>
+      <div class="campo"><span class="lbl">Fecha requerida de pago</span><input id="fReq" type="date" value="${esc(s.fecha_requerida)}"></div>
+    </div></div>
+    ${tipoForm==='gasto'?`<div class="bloque">
+      <label class="opcion" style="margin-bottom:12px"><input type="checkbox" id="fEstadia" ${e.total||s.gasto_tipo==='Movimiento entre patios'?'checked':''}> El patio destino cobra estadía</label>
+      <div class="campos" id="cajaEstadia">
+        <div class="campo"><span class="lbl">Patio origen</span><input id="eOri" value="${esc(e.origen)}"></div>
+        <div class="campo"><span class="lbl">Patio destino</span><input id="eDes" value="${esc(e.destino)}"></div>
+        <div class="campo"><span class="lbl">Costo por día</span><input id="eDia" type="number" min="0" step="0.01" value="${e.costoDia ?? ''}"></div>
+        <div class="campo"><span class="lbl">Días estimados</span><input id="eDias" type="number" min="0" step="1" value="${e.dias ?? ''}"></div>
+        <div class="campo ancho"><div class="calculo" id="calcEstadia"></div></div>
+      </div></div>`:''}`;
+  $('panelPie').innerHTML = `<div class="panel-pie"><button class="btn claro" data-ac="cerrar">Cancelar</button><button class="btn" data-ac="enviar" id="btnEnviar">${editando?'Reenviar a autorización':'Enviar a autorización'}</button></div>`;
+  bloquearXml(); recalcular(); abrir();
+}
+
+function ivaPct(){ if(xmlDatos) return Number(xmlDatos.ivaPct)||0; const v=$('fIva').value; return v==='otro' ? (parseFloat($('fIvaOtro').value)||0) : Number(v); }
+function montos(){
+  if(xmlDatos) return {capturado:Number(xmlDatos.total), subtotal:Number(xmlDatos.subtotal), iva:Number(xmlDatos.iva), ret:Number(xmlDatos.retenciones||0), total:Number(xmlDatos.total)};
+  const m = parseFloat($('fMonto').value)||0, p = ivaPct()/100, incl = $('fIncl').checked;
+  const subtotal = incl ? m/(1+p) : m, total = incl ? m : m*(1+p);
+  return {capturado:m, subtotal:+subtotal.toFixed(2), iva:+(total-subtotal).toFixed(2), ret:0, total:+total.toFixed(2)};
+}
+function estadiaVals(){
+  if(!$('fEstadia') || !$('fEstadia').checked) return null;
+  const costoDia = parseFloat($('eDia').value)||0, dias = parseInt($('eDias').value,10)||0;
+  return {origen:$('eOri').value.trim(), destino:$('eDes').value.trim(), costoDia, dias, total:+(costoDia*dias).toFixed(2)};
+}
+function bloquearXml(){
+  const on = !!xmlDatos;
+  ['fMonto','fIva','fIncl','fIvaOtro'].forEach(id => { if($(id)) $(id).disabled = on; });
+  if($('candado')) $('candado').textContent = on ? 'del XML' : '';
+}
+async function recalcular(){
+  if(!$('calculo')) return;
+  if($('cajaIvaOtro')) $('cajaIvaOtro').style.display = (!xmlDatos && $('fIva').value==='otro') ? 'block' : 'none';
+  const a = montos();
+  $('calculo').innerHTML = `<span>Subtotal <b>${money(a.subtotal)}</b></span><span>IVA ${ivaPct()}% <b>${money(a.iva)}</b></span>${a.ret?`<span>Retenciones <b>−${money(a.ret)}</b></span>`:''}<span>Total <b>${money(a.total)}</b></span>`;
+  if($('cajaEstadia')){
+    $('cajaEstadia').style.display = $('fEstadia').checked ? 'grid' : 'none';
+    const ev = estadiaVals();
+    if(ev) $('calcEstadia').innerHTML = `<span>Estadía <b>${money(ev.total)}</b></span><span>Costo total del movimiento <b>${money(a.total+ev.total)}</b></span>`;
+  }
+  // duplicados
+  if(tipoForm==='factura' && $('fNum')){
+    const num = $('fNum').value.trim(), prov = $('fProv').value.trim(), uuid = $('fUuid').value.trim(), rfc = $('fRfc').value.trim();
+    const norm = x => String(x||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const dups = estado.lista.filter(o => o.id!==editando?.id && o.tipo==='factura' && !['cancelada','rechazada'].includes(o.estado) &&
+      ((uuid && norm(o.factura_uuid)===norm(uuid)) || (num && norm(o.factura_numero)===norm(num) && ((rfc && norm(o.rfc)===norm(rfc)) || (prov && norm(o.proveedor)===norm(prov))))));
+    $('dupAviso').innerHTML = dups.length ? `<div class="bloque aviso" style="margin:0"><b>Posible factura duplicada.</b> Ya existe ${dups.map(d=>esc(d.folio)).join(', ')} con el mismo dato.</div>` : '';
+  }
+  // NIVs
+  const n = parseNivs($('fNivs').value);
+  if(!n.length){ $('nivPista').textContent = 'Opcional. Se validan contra el inventario de la plataforma.'; $('nivPrevio').innerHTML=''; return; }
+  const info = await validarNivs(n);
+  const ok = n.filter(x=>info[x]?.existe).length;
+  $('nivPista').textContent = `${n.length} NIV${n.length>1?'s':''}: ${ok} en el inventario${n.length-ok?`, ${n.length-ok} sin encontrar`:''}.`;
+  $('nivPrevio').innerHTML = n.slice(0,60).map(x=>{
+    const i = info[x];
+    return `<span class="pieza ${i?.existe?'ok':'no'}">${esc(x)}<small>${i?.existe?esc([i.patio,i.tipo].filter(Boolean).join(' · ')):'no está en el inventario'}</small></span>`;
+  }).join('') + (n.length>60?`<span class="pieza">y ${n.length-60} más</span>`:'');
+}
+
+/* ------- lectura del CFDI ------- */
+function leerCFDI(texto){
+  const doc = new DOMParser().parseFromString(texto,'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error('El archivo no es un XML válido.');
+  const q = n => doc.getElementsByTagNameNS('*',n)[0];
+  const c = q('Comprobante'); if(!c) throw new Error('El XML no es una factura CFDI.');
+  const at = (el,a) => el?.getAttribute(a) || '';
+  const em = q('Emisor'), tfd = q('TimbreFiscalDigital');
+  const imp = [...c.children].find(x=>x.localName==='Impuestos');
+  const tras = imp ? [...imp.getElementsByTagNameNS('*','Traslado')].filter(t=>at(t,'Impuesto')==='002') : [];
+  const iva = tras.reduce((a,t)=>a+(+at(t,'Importe')||0),0);
+  const tasa = tras.find(t=>at(t,'TasaOCuota'));
+  const subtotal = (+at(c,'SubTotal')||0) - (+at(c,'Descuento')||0);
+  const serie = at(c,'Serie'), folio = at(c,'Folio'), uuid = at(tfd,'UUID').toUpperCase();
+  const conceptos = [...doc.getElementsByTagNameNS('*','Concepto')].map(x=>at(x,'Descripcion').trim()).filter(Boolean);
+  return {
+    numero: serie&&folio ? `${serie}-${folio}` : (folio||serie||uuid.slice(-8)),
+    fecha: at(c,'Fecha').slice(0,10), proveedor: at(em,'Nombre'), rfc: at(em,'Rfc').toUpperCase(), uuid,
+    subtotal:+subtotal.toFixed(2), iva:+iva.toFixed(2),
+    ivaPct: tasa ? +((+at(tasa,'TasaOCuota'))*100).toFixed(2) : (subtotal ? +(iva/subtotal*100).toFixed(2) : 0),
+    retenciones: +(+at(imp,'TotalImpuestosRetenidos')||0).toFixed(2),
+    total: +(+at(c,'Total')||0).toFixed(2), moneda: at(c,'Moneda')||'MXN', tipoComp: at(c,'TipoDeComprobante'),
+    concepto: conceptos.length ? conceptos[0].slice(0,160) + (conceptos.length>1?` (y ${conceptos.length-1} concepto${conceptos.length>2?'s':''} más)`:'') : ''
+  };
+}
+async function tomarXml(file){
+  try{
+    const texto = await file.text();
+    const x = leerCFDI(texto);
+    xmlDatos = x; archivos.xml = file; archivos.xmlTexto = texto;
+    const set = (id,v) => { if($(id) && v) $(id).value = v; };
+    set('fNum',x.numero); set('fFecha',x.fecha); set('fProv',x.proveedor); set('fRfc',x.rfc); set('fUuid',x.uuid);
+    if($('fConc') && !$('fConc').value.trim()) $('fConc').value = x.concepto;
+    $('fMonto').value = x.total; $('fIncl').checked = true;
+    const opt = [...$('fIva').options].find(o=>Number(o.value)===x.ivaPct && o.value!=='otro');
+    if(opt) $('fIva').value = opt.value; else { $('fIva').value='otro'; $('fIvaOtro').value = x.ivaPct; }
+    const avisos = [];
+    if(x.tipoComp && x.tipoComp!=='I') avisos.push(`El comprobante es tipo "${x.tipoComp}", no de ingreso.`);
+    if(x.moneda && x.moneda!=='MXN') avisos.push(`La factura está en ${x.moneda}.`);
+    if(!x.uuid) avisos.push('El XML no trae timbre fiscal (UUID).');
+    $('xmlAviso').innerHTML = `<div class="calculo" style="margin-top:12px"><span>Del XML: <b>${esc(x.proveedor)}</b></span><span>${esc(x.numero)}</span><span>${money(x.total)}</span><span><a href="#" data-ac="quitarXml">quitar y capturar a mano</a></span></div>
+      ${avisos.map(a=>`<p class="pista" style="color:var(--senal-honda)">${esc(a)}</p>`).join('')}`;
+    const caja = $('cajaXml'); caja.classList.add('tiene'); caja.querySelector('span').textContent = `${file.name}, ${kb(file.size)}`;
+    bloquearXml(); recalcular();
+  }catch(err){ $('xmlAviso').innerHTML = `<p class="pista" style="color:var(--alerta)">${esc(err.message)}</p>`; }
+}
+function tomarPdf(file){
+  if(!/\.pdf$/i.test(file.name) && file.type!=='application/pdf'){ nota('Ese archivo no es un PDF.'); return; }
+  archivos.pdf = file;
+  const caja = $('cajaPdf'); caja.classList.add('tiene'); caja.querySelector('span').textContent = `${file.name}, ${kb(file.size)}`;
+}
+
+/* ------- guardar ------- */
+function marcar(id, mal){ const c = $(id)?.closest('.campo'); if(c) c.classList.toggle('mal', mal); return mal?1:0; }
+async function enviar(){
+  const a = montos(), concepto = $('fConc').value.trim(), prov = $('fProv').value.trim();
+  let errs = 0;
+  errs += marcar('fConc', !concepto);
+  errs += marcar('fMonto', !(a.total>0));
+  if(tipoForm==='factura'){ errs += marcar('fNum', !$('fNum').value.trim()); errs += marcar('fProv', !prov); }
+  else { errs += marcar('fGTipo', !$('fGTipo').value); errs += marcar('fJust', $('fJust').value.trim().length<15); }
+  if(errs){ nota('Revisa los campos marcados en rojo.'); return; }
+
+  const nivs = parseNivs($('fNivs').value);
+  const info = await validarNivs(nivs);
+  const faltantes = nivs.filter(n=>!info[n]?.existe);
+  if(faltantes.length && !confirm(`${faltantes.length} NIV${faltantes.length>1?'s no están':' no está'} en el inventario:\n${faltantes.slice(0,8).join('\n')}${faltantes.length>8?'\n…':''}\n\n¿Enviar así?`)) return;
+
+  const btn = $('btnEnviar'); btn.disabled = true; btn.textContent = 'Enviando…';
+  const datos = {
+    tipo: tipoForm, concepto, proveedor: prov || null,
+    rfc: tipoForm==='factura' ? ($('fRfc').value.trim().toUpperCase() || null) : null,
+    monto_capturado: a.capturado, incluye_iva: !!$('fIncl').checked,
+    subtotal: a.subtotal, iva_pct: ivaPct(), iva: a.iva, retenciones: a.ret, total: a.total,
+    justificacion: $('fJust').value.trim() || null, nivs,
+    urgencia: $('fUrg').value, fecha_requerida: $('fReq').value || null,
+    factura_numero: tipoForm==='factura' ? $('fNum').value.trim() : null,
+    factura_fecha: tipoForm==='factura' ? ($('fFecha').value || null) : null,
+    factura_uuid: tipoForm==='factura' ? ($('fUuid').value.trim().toUpperCase() || null) : null,
+    gasto_tipo: tipoForm==='gasto' ? $('fGTipo').value : null,
+    estadia: tipoForm==='gasto' ? estadiaVals() : null,
+    xml_datos: tipoForm==='factura' ? xmlDatos : null
+  };
+
+  try{
+    let id;
+    if(editando){
+      const { error } = await g.from('solicitudes').update(datos).eq('id', editando.id);
+      if(error) throw error;
+      id = editando.id;
+    } else {
+      datos.solicitante_id = estado.yo.id;
+      const { data, error } = await g.from('solicitudes').insert(datos).select('id,folio').single();
+      if(error) throw error;
+      id = data.id;
+    }
+    await subirArchivos(id);
+    if(editando){
+      const { error } = await g.rpc('reenviar', { p_id: id });
+      if(error) throw error;
+      nota(`${editando.folio} reenviada a autorización.`);
+    } else nota('Solicitud enviada a autorización.');
+    editando = null;
+    await cargar();
+    const s = estado.lista.find(x=>x.id===id);
+    if(s) verDetalle(s); else cerrar();
+  }catch(err){
+    const msg = String(err.message||err);
+    nota(msg.includes('solicitudes_uuid_unico')
+      ? 'Esa factura ya está registrada con el mismo folio fiscal.'
+      : 'No se pudo guardar: ' + msg);
+  }finally{
+    if($('btnEnviar')){ btn.disabled = false; btn.textContent = editando ? 'Reenviar a autorización' : 'Enviar a autorización'; }
+  }
+}
+async function subirArchivos(id){
+  const pendientes = [];
+  if(archivos.pdf) pendientes.push({clase:'pdf', file:archivos.pdf, nombre:archivos.pdf.name});
+  if(archivos.xmlTexto && tipoForm==='factura') pendientes.push({clase:'xml', file:new Blob([archivos.xmlTexto],{type:'application/xml'}), nombre:archivos.xml.name});
+  for(const p of pendientes){
+    const ruta = `${id}/${p.clase}-${Date.now()}-${p.nombre.replace(/[^\w.\-]/g,'_')}`;
+    const { error } = await core.storage.from(BUCKET).upload(ruta, p.file, { upsert:false });
+    if(error){ nota('No se pudo subir ' + p.nombre + ': ' + error.message); continue; }
+    await g.from('adjuntos').insert({ solicitud_id:id, clase:p.clase, nombre:p.nombre, ruta, tam_bytes:p.file.size });
+  }
+  archivos = {pdf:null,xml:null,xmlTexto:null};
+}
+
+/* ---------------- acciones ---------------- */
+let claseMotivo = null;
+async function accion(ac, extra){
+  const s = estado.lista.find(x=>x.id===estado.abierto?.id); if(!s) return;
+  let error = null;
+  if(ac==='autorizar')      ({ error } = await g.rpc('autorizar', { p_id:s.id }));
+  if(ac==='rechazar')       ({ error } = await g.rpc('rechazar',  { p_id:s.id, p_motivo:extra }));
+  if(ac==='devolver')       ({ error } = await g.rpc('devolver',  { p_id:s.id, p_comentario:extra }));
+  if(ac==='cancelar')       ({ error } = await g.rpc('cancelar',  { p_id:s.id }));
+  if(ac==='recordar'){
+    const t = turnoDe(s);
+    const texto = `Hola ${nombreDe(t)}, tienes pendiente la solicitud ${s.folio} en la Plataforma HT: ${s.concepto}, por ${money(s.total)}${s.urgencia==='Urgente'?' (urgente)':''}. La registró ${s.solicitante_nombre}. Puedes revisarla en ${location.href.split('#')[0]}`;
+    try{ await navigator.clipboard.writeText(texto); nota(`Recordatorio copiado para ${nombreDe(t)}.`); }
+    catch(e){ prompt('Copia este recordatorio:', texto); }
+    ({ error } = await g.rpc('registrar_recordatorio', { p_id:s.id }));
+  }
+  if(error){ nota('No se pudo completar: ' + error.message); return; }
+  if(ac==='autorizar') nota(`${s.folio} autorizada.`);
+  if(ac==='rechazar')  nota(`${s.folio} rechazada.`);
+  if(ac==='devolver')  nota(`${s.folio} devuelta a ${s.solicitante_nombre}.`);
+  await cargar();
+}
+
+async function verArchivo(idAdj){
+  const s = estado.lista.find(x=>x.id===estado.abierto?.id);
+  const a = (s?.adjuntos||[]).find(x=>x.id===idAdj); if(!a) return;
+  const { data, error } = await core.storage.from(BUCKET).createSignedUrl(a.ruta, 3600);
+  if(error){ nota('No se pudo abrir el archivo: ' + error.message); return; }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+/* ---------------- eventos ---------------- */
+document.addEventListener('click', async ev => {
+  const ver = ev.target.closest('[data-ver]');
+  if(ver){ ev.preventDefault(); verArchivo(ver.dataset.ver); return; }
+  const b = ev.target.closest('[data-ac]');
+  if(b){
+    ev.preventDefault();
+    const ac = b.dataset.ac;
+    if(ac==='cerrar') cerrar();
+    if(ac==='tipo'){ tipoForm = b.dataset.v; if(tipoForm!=='factura'){ xmlDatos=null; archivos.xml=null; archivos.xmlTexto=null; } nuevaSolicitud(editando ? {...editando, tipo:tipoForm} : {tipo:tipoForm}); }
+    if(ac==='quitarXml'){ xmlDatos=null; archivos.xml=null; archivos.xmlTexto=null; $('xmlAviso').innerHTML=''; const c=$('cajaXml'); c.classList.remove('tiene'); c.querySelector('span').textContent='Arrastra o elige el XML. Llena número, proveedor, montos, IVA y UUID.'; bloquearXml(); recalcular(); }
+    if(ac==='enviar') enviar();
+    if(ac==='autorizar') accion('autorizar');
+    if(ac==='pedirMotivo'){ claseMotivo = b.dataset.clase; $('motivo').classList.add('on'); $('motivoLbl').textContent = claseMotivo==='rechazar' ? 'Motivo del rechazo (obligatorio)' : '¿Qué se debe corregir? (obligatorio)'; $('motivoTxt').focus(); }
+    if(ac==='ocultarMotivo') $('motivo').classList.remove('on');
+    if(ac==='confirmarMotivo'){ const t=$('motivoTxt').value.trim(); if(t.length<5){ nota('Escribe el motivo.'); return; } accion(claseMotivo, t); }
+    if(ac==='corregir'){ const s = estado.lista.find(x=>x.id===estado.abierto?.id); if(s) nuevaSolicitud(s); }
+    if(ac==='cancelar'){ if(confirm('¿Cancelar esta solicitud? Queda en el historial como cancelada.')) accion('cancelar'); }
+    if(ac==='recordar') accion('recordar');
+    return;
+  }
+  const fila = ev.target.closest('tr.fila') || ev.target.closest('[data-id]');
+  if(fila && fila.dataset.id){ const s = estado.lista.find(x=>x.id===fila.dataset.id); if(s){ ev.preventDefault(); verDetalle(s); } return; }
+  const tab = ev.target.closest('[data-tab]');
+  if(tab){ estado.tab = tab.dataset.tab; pintar(); }
+});
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if(t.id==='upXml' && t.files[0]) tomarXml(t.files[0]);
+  if(t.id==='upPdf' && t.files[0]) tomarPdf(t.files[0]);
+  if(estado.abierto?.tipo==='forma' && t.closest('#panelCuerpo')){
+    if(t.id==='fGTipo' && t.value==='Movimiento entre patios' && $('fEstadia')) $('fEstadia').checked = true;
+    recalcular();
+  }
+});
+document.addEventListener('input', ev => { if(estado.abierto?.tipo==='forma' && ev.target.closest('#panelCuerpo')) recalcular(); });
+document.addEventListener('dragover', ev => { const d = ev.target.closest('.soltar'); if(d){ ev.preventDefault(); d.classList.add('encima'); } });
+document.addEventListener('dragleave', ev => { const d = ev.target.closest('.soltar'); if(d) d.classList.remove('encima'); });
+document.addEventListener('drop', ev => {
+  const d = ev.target.closest('.soltar'); if(!d) return;
+  ev.preventDefault(); d.classList.remove('encima');
+  const f = ev.dataTransfer.files[0]; if(!f) return;
+  if(/\.xml$/i.test(f.name) && $('cajaXml')) tomarXml(f);
+  else if(/\.pdf$/i.test(f.name)) tomarPdf(f);
+  else nota('Usa un archivo XML o PDF.');
+});
+document.addEventListener('keydown', ev => { if(ev.key==='Escape' && $('panel').classList.contains('on')) cerrar(); });
+$('telon').addEventListener('click', cerrar);
+$('cerrar').addEventListener('click', cerrar);
+$('nueva').addEventListener('click', () => nuevaSolicitud(null));
+$('q').addEventListener('input', e => { estado.q = e.target.value; pintar(); });
+$('fTipo').addEventListener('change', e => { estado.fTipo = e.target.value; pintar(); });
+$('fEstado').addEventListener('change', e => { estado.fEstado = e.target.value; pintar(); });
+$('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html'; });
+
+await cargar();
+</script>
+</body>
+</html>
