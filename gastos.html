@@ -85,7 +85,7 @@ const kb = n => n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round
 const parseNivs = t => [...new Set(String(t||'').toUpperCase().split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean))];
 function nota(t){ const n=$('nota'); n.textContent=t; n.classList.add('on'); clearTimeout(nota._t); nota._t=setTimeout(()=>n.classList.remove('on'),4000); }
 
-const estado = { yo:null, lista:[], personas:{}, tab:'pend', q:'', fTipo:'', fEstado:'', abierto:null, catalogo:{} };
+const estado = { yo:null, lista:[], personas:{}, proveedores:[], tab:'pend', q:'', fTipo:'', fEstado:'', abierto:null, catalogo:{} };
 
 /* ---------------- arranque ---------------- */
 const { data:{ session } } = await core.auth.getSession();
@@ -100,6 +100,9 @@ estado.yo = { id: usuario.id, nombre: perfil?.nombre || usuario.email, puesto: p
 const { data: gente } = await g.from('v_personas').select('id,nombre,puesto');
 (gente||[]).forEach(p => estado.personas[p.id] = p);
 estado.personas[usuario.id] ??= estado.yo;
+
+const { data: provs } = await g.from('proveedores').select('nombre,rfc,contacto').order('nombre');
+estado.proveedores = provs || [];
 
 /* ---------------- datos ---------------- */
 const nombreDe = id => estado.personas[id]?.nombre || 'Autorizador';
@@ -341,6 +344,7 @@ function nuevaSolicitud(src){
   const ivaSel = s.iva_pct==null ? 16 : (ivaOpc.includes(Number(s.iva_pct)) ? Number(s.iva_pct) : 'otro');
   const e = s.estadia || {};
   $('panelCuerpo').innerHTML = `
+    <datalist id="catProv">${estado.proveedores.map(p=>`<option value="${esc(p.nombre)}">${esc(p.rfc||'')}</option>`).join('')}</datalist>
     <div class="segmento" role="group">
       <button type="button" data-ac="tipo" data-v="factura" aria-pressed="${tipoForm==='factura'}">Pago de factura</button>
       <button type="button" data-ac="tipo" data-v="gasto" aria-pressed="${tipoForm==='gasto'}">Autorización de gasto</button>
@@ -356,11 +360,11 @@ function nuevaSolicitud(src){
       ${tipoForm==='factura'?`
         <div class="campo"><span class="lbl">No. de factura <i>*</i></span><input id="fNum" value="${esc(s.factura_numero)}"></div>
         <div class="campo"><span class="lbl">Fecha de factura</span><input id="fFecha" type="date" value="${esc(s.factura_fecha)}"></div>
-        <div class="campo"><span class="lbl">Proveedor <i>*</i></span><input id="fProv" value="${esc(s.proveedor)}"></div>
+        <div class="campo"><span class="lbl">Proveedor <i>*</i></span><input id="fProv" list="catProv" autocomplete="off" placeholder="Elige de la lista o escribe uno nuevo" value="${esc(s.proveedor)}"><div class="pista" id="provPista"></div></div>
         <div class="campo"><span class="lbl">RFC del proveedor</span><input id="fRfc" value="${esc(s.rfc)}"></div>
         <div class="campo ancho"><span class="lbl">Folio fiscal (UUID)</span><input id="fUuid" value="${esc(s.factura_uuid)}"></div>`
       :`<div class="campo"><span class="lbl">Tipo de gasto <i>*</i></span><select id="fGTipo"><option value="">Selecciona…</option>${TIPOS_GASTO.map(t=>`<option ${s.gasto_tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
-        <div class="campo"><span class="lbl">Proveedor</span><input id="fProv" value="${esc(s.proveedor)}"></div>`}
+        <div class="campo"><span class="lbl">Proveedor</span><input id="fProv" list="catProv" autocomplete="off" placeholder="Opcional. Elige de la lista o escribe uno" value="${esc(s.proveedor)}"><div class="pista" id="provPista"></div></div>`}
       <div class="campo ancho"><span class="lbl">Concepto <i>*</i></span><input id="fConc" value="${esc(s.concepto)}" placeholder="${tipoForm==='factura'?'Ej. Actualización de verificaciones fisicomecánicas':'Ej. Traslado de 3 cajas secas a Tractomundo'}"></div>
       <div class="campo"><span class="lbl">Monto <i>*</i> <span id="candado" class="mono" style="color:var(--senal-honda)"></span></span><input id="fMonto" type="number" min="0" step="0.01" inputmode="decimal" value="${s.monto_capturado ?? s.total ?? ''}"></div>
       <div class="campo"><span class="lbl">IVA</span><select id="fIva">${ivaOpc.map(p=>`<option value="${p}" ${ivaSel===p?'selected':''}>${p?p+'%':'Sin IVA'}</option>`).join('')}<option value="otro" ${ivaSel==='otro'?'selected':''}>Otro porcentaje</option></select></div>
@@ -403,8 +407,21 @@ function bloquearXml(){
   ['fMonto','fIva','fIncl','fIvaOtro'].forEach(id => { if($(id)) $(id).disabled = on; });
   if($('candado')) $('candado').textContent = on ? 'del XML' : '';
 }
+function autoProveedor(){
+  if(!$('fProv')) return;
+  const v = $('fProv').value.trim().toUpperCase();
+  const p = estado.proveedores.find(x=>x.nombre.toUpperCase()===v);
+  if(p){
+    if($('fRfc') && !xmlDatos) $('fRfc').value = p.rfc || '';
+    if($('provPista')) $('provPista').textContent = `Del catálogo${p.rfc?`, RFC ${p.rfc}`:''}${p.contacto?`, contacto ${p.contacto}`:''}.`;
+  } else if($('provPista')){
+    $('provPista').textContent = v ? 'No está en el catálogo de proveedores. Se guardará tal como lo escribas.' : '';
+  }
+}
+
 async function recalcular(){
   if(!$('calculo')) return;
+  autoProveedor();
   if($('cajaIvaOtro')) $('cajaIvaOtro').style.display = (!xmlDatos && $('fIva').value==='otro') ? 'block' : 'none';
   const a = montos();
   $('calculo').innerHTML = `<span>Subtotal <b>${money(a.subtotal)}</b></span><span>IVA ${ivaPct()}% <b>${money(a.iva)}</b></span>${a.ret?`<span>Retenciones <b>−${money(a.ret)}</b></span>`:''}<span>Total <b>${money(a.total)}</b></span>`;
