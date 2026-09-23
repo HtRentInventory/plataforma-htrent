@@ -204,7 +204,7 @@ label>span.lbl{margin-bottom:5px}
    Vive sobre core: equipos, patios, fotos, eventos y adicionales.
    Captura en campo con cola local: si no hay señal, se guarda y sube después.
    ===================================================================== */
-const APP_VERSION = 'v3 · plataforma · 8 oct 2026';
+const APP_VERSION = 'v4 · plataforma · 8 oct 2026';
 
 const SUPABASE_URL  = 'https://ahfjstuwekcuxshclprl.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZmpzdHV3ZWtjdXhzaGNscHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNDg2MjYsImV4cCI6MjEwMzYyNDYyNn0.lf1uw8WHPRy21GuYlK9NzeI5JgJK2be1LrODq22CodM';
@@ -386,7 +386,7 @@ async function sincronizar(){
     await subirMovimientos();
     await subirFotos();
     SYNC.ultimo = stamp();
-    if(SYNC.fallos.length) SYNC.error = `No subieron ${SYNC.fallos.length} registros. Vuelve a intentar con buena señal.`;
+    if(SYNC.fallos.length) SYNC.error = `No subió: ${SYNC.fallos[0]}${SYNC.fallos.length>1?` (y ${SYNC.fallos.length-1} más)`:''}`;
   }catch(err){
     const m = (err && err.message) || '';
     SYNC.error = m.includes('Failed to fetch') ? 'Se cortó la conexión. Lo pendiente sigue guardado en este dispositivo.' : (m||'Falló la sincronización');
@@ -405,10 +405,13 @@ async function subirMovimientos(){
       condicion:m.condicion||null, adicionales:m.adicionales, obs:m.obs||null,
       registrado_por:S.yo.id, gps_lat:m.gps_lat, gps_lng:m.gps_lng
     };
-    const { error } = await CORE.from('movimientos').upsert(fila, {onConflict:'id'});
+    const { error } = await CORE.from('movimientos').insert(fila);
     if(error){
       if((error.message||'').includes('Failed to fetch')) throw error;
-      SYNC.fallos.push('movimiento '+m.niv); continue;
+      if(String(error.code)==='23505'){            // ya estaba arriba: se da por bueno
+        m.dirty=false; await store.put('movimientos', m); continue;
+      }
+      SYNC.fallos.push(`${m.niv}: ${error.message}`); continue;
     }
     m.dirty=false; await store.put('movimientos', m);
     aplicarLocal(m);
@@ -426,7 +429,7 @@ async function subirFotos(){
     const { error } = await CORE.storage.from(BUCKET).upload(ruta, rec.blob, {contentType:'image/jpeg', upsert:true});
     if(error){
       if((error.message||'').includes('Failed to fetch')) throw error;
-      SYNC.fallos.push('foto'); continue;
+      SYNC.fallos.push('foto: '+error.message); continue;
     }
     const { error:e2 } = await CORE.from('fotos').insert({
       id:f.id, equipo_id:padre.equipo_id,
@@ -437,7 +440,7 @@ async function subirFotos(){
     });
     if(e2 && !String(e2.message||'').includes('duplicate')){
       if((e2.message||'').includes('Failed to fetch')) throw e2;
-      SYNC.fallos.push('foto'); continue;
+      SYNC.fallos.push('foto: '+e2.message); continue;
     }
     rec.ruta=ruta; await store.put('fotos', rec); f.ruta=ruta;
   }
