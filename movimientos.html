@@ -126,10 +126,13 @@ label>span.lbl{margin-bottom:5px}
 .visor-pie{color:#B9C8DC;font-size:12px;text-align:center;padding:8px 0 calc(10px + env(safe-area-inset-bottom))}
 
 /* pantallas completas de captura */
-.sheet{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;display:none}
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:45;overflow-y:auto;display:none}
 .sheet.open{display:block}
-.sheet-head{position:sticky;top:0;z-index:5;background:var(--navy);border-bottom:4px solid var(--lime)}
-.sheet-head .barra{padding:12px 16px}
+.sheet-head{position:sticky;top:0;z-index:5;background:var(--navy);border-bottom:4px solid var(--lime);padding-top:env(safe-area-inset-top)}
+.sheet-head .barra{padding:12px 16px;gap:12px;flex-wrap:nowrap;justify-content:flex-start}
+.sheet-head .titulo{font-family:var(--display);font-style:italic;font-weight:800;font-size:19px;color:#fff;line-height:1}
+.sheet-head .salir{flex-shrink:0}
+.sheet-foot{z-index:46}
 .sheet-body{max-width:640px;margin:0 auto;padding:4px 14px 130px}
 .sheet-foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
   padding:10px 14px calc(10px + env(safe-area-inset-bottom));z-index:31}
@@ -176,6 +179,7 @@ label>span.lbl{margin-bottom:5px}
 <section class="sheet" id="sheetMov">
   <div class="sheet-head"><div class="barra">
     <button class="salir" onclick="cerrarMov()">← Volver</button>
+    <span class="titulo">Registrar movimiento</span>
     <div class="sp"></div><div id="movTag"></div>
   </div></div>
   <div class="sheet-body" id="movBody"></div>
@@ -188,7 +192,8 @@ label>span.lbl{margin-bottom:5px}
 <section class="sheet" id="sheetUnidad">
   <div class="sheet-head"><div class="barra">
     <button class="salir" onclick="cerrarUnidad()">← Volver</button>
-    <div class="sp"></div><div class="eyebrow" style="color:#B9C8DC">Histórico</div>
+    <span class="titulo">Histórico del equipo</span>
+    <div class="sp"></div>
   </div></div>
   <div class="sheet-body" id="unidadBody"></div>
 </section>
@@ -204,7 +209,7 @@ label>span.lbl{margin-bottom:5px}
    Vive sobre core: equipos, patios, fotos, eventos y adicionales.
    Captura en campo con cola local: si no hay señal, se guarda y sube después.
    ===================================================================== */
-const APP_VERSION = 'v4 · plataforma · 8 oct 2026';
+const APP_VERSION = 'v5 · plataforma · 8 oct 2026';
 
 const SUPABASE_URL  = 'https://ahfjstuwekcuxshclprl.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZmpzdHV3ZWtjdXhzaGNscHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNDg2MjYsImV4cCI6MjEwMzYyNDYyNn0.lf1uw8WHPRy21GuYlK9NzeI5JgJK2be1LrODq22CodM';
