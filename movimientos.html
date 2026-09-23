@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B3D66">
+<title>Entradas y Salidas · Plataforma HT</title>
+<link rel="manifest" href="manifest-movimientos.json">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira:ital,wght@1,700;1,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ht.css">
+<style>
+/* =====================================================================
+   Módulo Movimientos · complementa ht.css
+   Todos los colores salen de las variables de la hoja compartida.
+   Aquí solo van las piezas de captura en campo que la plataforma no trae.
+   ===================================================================== */
+body{padding-bottom:78px}
+main{max-width:640px;padding:16px 14px 24px}
+
+/* encabezado propio del módulo */
+header .barra{padding:12px 16px;gap:12px}
+.barra .marca{font-size:20px}
+.rotulo b{font-size:17px}
+.estado-mod{margin-left:auto;text-align:right;font-size:12px;line-height:1.35;color:#B9C8DC}
+.estado-mod b{display:block;font-family:var(--mono);font-size:13px;color:#fff}
+
+/* barra inferior */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--navy);border-top:4px solid var(--lime);
+  display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+nav.tabs button{background:none;color:#B9C8DC;padding:9px 4px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:3px}
+nav.tabs button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
+nav.tabs button.on{color:var(--lime)}
+
+/* bloques y utilidades */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:12px 0}
+.card.tight{padding:10px}
+h2.sec{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:20px 0 8px}
+label{margin-top:10px}
+label>span.lbl{margin-bottom:5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp{flex:1}
+.hint{font-size:12.5px;color:var(--muted);margin:6px 0 0}
+.btnrow{display:flex;gap:8px}.btnrow>*{flex:1}
+.btn.ancho{margin-top:0}
+.mini{width:100%;border-collapse:collapse;font-size:13.5px;background:transparent}
+.mini td{padding:7px 2px;border-bottom:1px solid var(--line);vertical-align:top}
+.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:700}
+.vacio{text-align:center;padding:30px 12px}
+
+/* renglones de lista */
+.item{background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--edge);border-radius:var(--r);
+  padding:11px 12px;margin-bottom:8px;display:block;width:100%;text-align:left;cursor:pointer}
+.item:hover{border-color:var(--navy)}
+.item.entrada{border-left-color:var(--lime)}
+.item.salida{border-left-color:var(--red)}
+.item.traspaso{border-left-color:var(--navy)}
+.item.levantamiento{border-left-color:var(--pend)}
+.item .niv{font-family:var(--mono);font-size:14.5px;font-weight:700;word-break:break-all;color:var(--ink)}
+.item .meta{font-size:12.5px;color:var(--muted);margin-top:3px}
+.item .foot{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.count{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+
+/* etiquetas de tipo de movimiento, sobre los sellos de la plataforma */
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 8px;border-radius:3px;background:var(--pend);color:var(--text);white-space:nowrap}
+.t-ent{background:var(--lime-soft);color:var(--lime-ink);border:1px solid var(--lime)}
+.t-sal{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
+.t-tra{background:var(--navy);color:#fff}
+.t-lev{background:var(--pend);color:var(--muted)}
+.t-pend{background:var(--amber-soft);color:#7A5200;border:1px solid var(--amber)}
+
+/* avisos */
+.banner{border-radius:var(--r);padding:11px 13px;font-size:13.5px;margin:12px 0;border-left:6px solid var(--navy);background:var(--surface);border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.b-warn{border-left-color:var(--amber);background:var(--amber-soft);color:#6B4A00}
+.b-info{border-left-color:var(--navy);background:#E7EDF4;color:var(--text)}
+.b-ok{border-left-color:var(--lime);background:var(--lime-soft);color:var(--lime-ink)}
+
+/* botonera de captura */
+.big{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.big button{border:2px solid var(--line);border-radius:var(--r);background:var(--surface);padding:20px 10px;
+  font-family:var(--display);font-style:italic;font-weight:800;font-size:18px;text-transform:uppercase;
+  display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink)}
+.big button svg{width:32px;height:32px;stroke:currentColor;fill:none;stroke-width:1.6}
+.big button.ent{border-color:var(--lime);color:var(--lime-ink)}
+.big button.sal{border-color:var(--red);color:var(--red)}
+.big button.tra{border-color:var(--navy);color:var(--navy)}
+.big button[disabled]{opacity:.45}
+
+/* fotos */
+.angles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.angle{border:2px dashed var(--line);border-radius:var(--r);background:var(--bg);padding:8px 6px;text-align:center;cursor:pointer;
+  position:relative;min-height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.angle.has{border-style:solid;border-color:var(--lime);background:var(--surface)}
+.angle .lbl{font-size:11px;font-weight:600;line-height:1.2;color:var(--muted);margin:0}
+.angle.has .lbl{color:var(--text)}
+.angle .badge{position:absolute;top:-7px;right:-7px;background:var(--lime);color:#0A2A0E;font-family:var(--mono);font-size:11px;
+  font-weight:700;border-radius:999px;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.angle img{width:100%;height:52px;object-fit:cover;border-radius:3px}
+.angle svg{width:22px;height:22px;stroke:var(--muted);fill:none;stroke-width:1.6}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.thumb{position:relative}
+.thumb img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:var(--r);border:1px solid var(--line);cursor:zoom-in}
+.thumb button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:999px;background:var(--red);color:#fff;font-size:13px;line-height:1}
+
+/* adicionales */
+.add-row{border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-bottom:8px;background:var(--bg)}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.stepper button{width:42px;height:42px;background:var(--surface);font-size:20px;color:var(--navy);font-weight:700}
+.stepper input{width:56px;border:0;text-align:center;font-family:var(--mono);font-weight:700;padding:0}
+
+/* histórico */
+.hist{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.hist .fecha{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap;padding-top:3px}
+
+/* visor de fotos */
+.visor{position:fixed;inset:0;background:#081826;z-index:60;display:flex;flex-direction:column}
+.visor-top{display:flex;align-items:center;gap:10px;padding:12px 14px;color:#fff;font-size:12.5px;background:var(--navy);
+  border-bottom:4px solid var(--lime);padding-top:calc(12px + env(safe-area-inset-top))}
+.visor-top span{flex:1;font-family:var(--mono)}
+.visor-top button{background:transparent;border:1px solid var(--edge);color:#fff;border-radius:var(--r);width:34px;height:34px;font-size:17px}
+.visor-img{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px}
+.visor-img img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
+.visor-img img.zoom{max-width:none;max-height:none;width:260%;object-fit:none;cursor:zoom-out}
+.visor-pie{color:#B9C8DC;font-size:12px;text-align:center;padding:8px 0 calc(10px + env(safe-area-inset-bottom))}
+
+/* pantallas completas de captura */
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;display:none}
+.sheet.open{display:block}
+.sheet-head{position:sticky;top:0;z-index:5;background:var(--navy);border-bottom:4px solid var(--lime)}
+.sheet-head .barra{padding:12px 16px}
+.sheet-body{max-width:640px;margin:0 auto;padding:4px 14px 130px}
+.sheet-foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));z-index:31}
+.sheet-foot .inner{max-width:640px;margin:0 auto;display:flex;gap:8px}
+.sheet-foot .inner>*{flex:1}
+.hidden{display:none!important}
+@media (max-width:760px){ .grid2{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="cinta"></div>
+  <div class="barra">
+    <div class="marca">Plataforma <span>HT</span></div>
+    <div class="rotulo"><b>HT RENT &gt;</b><span>ARRENDA Y CRECE</span></div>
+    <div class="quien">
+      <b id="nombreUsuario">—</b><br>
+      <span class="eyebrow" id="puestoUsuario"></span>
+    </div>
+    <button class="salir" id="salir">Salir</button>
+  </div>
+</header>
+
+<main>
+  <a class="migaja" href="index.html">← Volver a módulos</a>
+  <h1>Entradas y salidas</h1>
+  <span class="eyebrow" id="hSub">—</span>
+  <div id="franja"></div>
+  <div class="cifras" id="tablero" style="margin:14px 0"></div>
+  <div id="view-capturar"></div>
+  <div id="view-hoy" class="hidden"></div>
+  <div id="view-buscar" class="hidden"></div>
+  <div id="view-sesion" class="hidden"></div>
+</main>
+
+<nav class="tabs">
+  <button data-tab="capturar" class="on"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Capturar</button>
+  <button data-tab="hoy"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Hoy</button>
+  <button data-tab="buscar"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Buscar</button>
+  <button data-tab="sesion"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10l2 2M19 5l-2 2M7 17l-2 2"/></svg>Sesión</button>
+</nav>
+
+<section class="sheet" id="sheetMov">
+  <div class="sheet-head"><div class="barra">
+    <button class="salir" onclick="cerrarMov()">← Volver</button>
+    <div class="sp"></div><div id="movTag"></div>
+  </div></div>
+  <div class="sheet-body" id="movBody"></div>
+  <div class="sheet-foot"><div class="inner">
+    <button class="btn claro" onclick="cerrarMov()">Cancelar</button>
+    <button class="btn" onclick="guardarMov()">Registrar movimiento</button>
+  </div></div>
+</section>
+
+<section class="sheet" id="sheetUnidad">
+  <div class="sheet-head"><div class="barra">
+    <button class="salir" onclick="cerrarUnidad()">← Volver</button>
+    <div class="sp"></div><div class="eyebrow" style="color:#B9C8DC">Histórico</div>
+  </div></div>
+  <div class="sheet-body" id="unidadBody"></div>
+</section>
+
+<div class="nota" id="nota" role="status"></div>
+<input type="file" id="fileFoto" accept="image/*" capture="environment" multiple class="hidden">
+<input type="file" id="fileGaleria" accept="image/*" multiple class="hidden">
+
+<script>
+/* =====================================================================
+   MÓDULO MOVIMIENTOS · Plataforma HT
+   Entradas, salidas y traspasos de equipos en patio.
+   Vive sobre core: equipos, patios, fotos, eventos y adicionales.
+   Captura en campo con cola local: si no hay señal, se guarda y sube después.
+   ===================================================================== */
+const APP_VERSION = 'v3 · plataforma · 8 oct 2026';
+
+const SUPABASE_URL  = 'https://ahfjstuwekcuxshclprl.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZmpzdHV3ZWtjdXhzaGNscHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNDg2MjYsImV4cCI6MjEwMzYyNDYyNn0.lf1uw8WHPRy21GuYlK9NzeI5JgJK2be1LrODq22CodM';
+const BUCKET = 'fotos-equipos';
+const LIB    = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+
+const CAT = {
+  condiciones:   ["Nuevo","Usado - Bueno","Usado - Regular","Usado - Malo","Chatarra"],
+  estatusFisico: ["Operativo","Requiere reparación menor","Requiere reparación mayor","Siniestrado","Fuera de operación"],
+  origen:  ["Cliente","Fabricante","Otro patio","Taller","Sin especificar"],
+  destino: ["Cliente","Otro patio","Taller","Venta","Subasta","Sin especificar"],
+  angulos: ["Frontal","Lateral izquierdo","Lateral derecho","Trasera","NIV grabado","Placas",
+            "Piso / plataforma","Ejes y suspensión","Llantas","Adicionales","Daños","Documentos"],
+  adicionales: []            // se llena de core.catalogo_adicionales
+};
+
+/* ------------------------------ UTILS ------------------------------- */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==='x'?r:(r&0x3|0x8)).toString(16);}));
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,' ').replace(/\s+/g,' ').trim();
+const hoy = () => new Date().toISOString().slice(0,10);
+const stamp = () => new Date().toLocaleString('es-MX',{hour12:false});
+const fCorta = t => t ? new Date(t).toLocaleString('es-MX',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}) : '';
+function opciones(arr, sel){
+  const lista = (sel && !arr.some(v=>norm(v)===norm(sel))) ? [sel,...arr] : arr;
+  return lista.map(v=>`<option value="${esc(v)}"${norm(v)===norm(sel)?' selected':''}>${esc(v)}</option>`).join('');
+}
+const opcionesPatio = sel => `<option value="">— Seleccionar —</option>` +
+  S.patios.map(p=>`<option value="${p.id}"${String(p.id)===String(sel)?' selected':''}>${esc(p.nombre)}</option>`).join('');
+const nombrePatio = id => (S.patios.find(p=>String(p.id)===String(id))||{}).nombre || '';
+function nota(t, ms=4000){
+  const n=$('#nota'); n.textContent=t; n.classList.add('on');
+  clearTimeout(nota._t); nota._t=setTimeout(()=>n.classList.remove('on'), ms);
+}
+function preguntar(texto, aceptar='Continuar'){
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(5,15,30,.6);z-index:70;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML=`<div style="background:var(--surface);border:2px solid var(--edge);border-radius:var(--r);max-width:430px;width:100%">
+      <div class="cinta"></div>
+      <div style="padding:20px">
+        <div style="font-size:14.5px;line-height:1.5;white-space:pre-line">${esc(texto)}</div>
+        <div class="btnrow" style="margin-top:18px"><button class="btn claro" data-no>Cancelar</button>
+        <button class="btn" data-si>${esc(aceptar)}</button></div>
+      </div></div>`;
+    ov.querySelector('[data-no]').onclick=()=>{ov.remove();res(false);};
+    ov.querySelector('[data-si]').onclick=()=>{ov.remove();res(true);};
+    document.body.appendChild(ov);
+  });
+}
+
+/* ------------------------- ALMACÉN LOCAL ---------------------------- */
+const STORES = ['kv','equipos','patios','movimientos','fotos'];
+let DB=null, MEM=null;
+function abrirDB(){
+  return new Promise(res=>{
+    let ok=false;
+    try{
+      const req = indexedDB.open('ht_movimientos_core', 1);
+      req.onupgradeneeded = e => { const d=e.target.result;
+        if(!d.objectStoreNames.contains('kv'))          d.createObjectStore('kv',{keyPath:'k'});
+        if(!d.objectStoreNames.contains('equipos'))     d.createObjectStore('equipos',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('patios'))      d.createObjectStore('patios',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('movimientos')) d.createObjectStore('movimientos',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('fotos'))       d.createObjectStore('fotos',{keyPath:'id'});
+      };
+      req.onsuccess = e => { ok=true; DB=e.target.result; res(true); };
+      req.onerror = () => { if(!ok){ MEM=mem(); res(false); } };
+      setTimeout(()=>{ if(!ok && !DB){ MEM=mem(); res(false); } },2500);
+    }catch(e){ MEM=mem(); res(false); }
+  });
+}
+function mem(){ const m={}; STORES.forEach(s=>m[s]=new Map()); return m; }
+const store = {
+  put(s,o){ if(MEM){ MEM[s].set(o.id ?? o.k, o); return Promise.resolve(); }
+    return new Promise((r,j)=>{const t=DB.transaction(s,'readwrite');t.objectStore(s).put(o);t.oncomplete=r;t.onerror=j;}); },
+  del(s,k){ if(MEM){ MEM[s].delete(k); return Promise.resolve(); }
+    return new Promise((r,j)=>{const t=DB.transaction(s,'readwrite');t.objectStore(s).delete(k);t.oncomplete=r;t.onerror=j;}); },
+  all(s){ if(MEM) return Promise.resolve([...MEM[s].values()]);
+    return new Promise((r,j)=>{const q=DB.transaction(s,'readonly').objectStore(s).getAll();q.onsuccess=()=>r(q.result||[]);q.onerror=j;}); },
+  get(s,k){ if(MEM) return Promise.resolve(MEM[s].get(k));
+    return new Promise((r,j)=>{const q=DB.transaction(s,'readonly').objectStore(s).get(k);q.onsuccess=()=>r(q.result);q.onerror=j;}); },
+  bulk(s,arr){ if(MEM){ arr.forEach(o=>MEM[s].set(o.id,o)); return Promise.resolve(); }
+    return new Promise((r,j)=>{const t=DB.transaction(s,'readwrite');const st=t.objectStore(s);arr.forEach(o=>st.put(o));t.oncomplete=r;t.onerror=j;}); }
+};
+
+/* --------------------------- ESTADO --------------------------------- */
+const S = { tab:'capturar', yo:null, patioId:'', equipos:[], patios:[], movimientos:[], fotos:[],
+            busca:'', movId:null };
+const nuevoMov = o => Object.assign({
+  id:uid(), equipo_id:'', niv:'', tipo_mov:'entrada', fecha:new Date().toISOString(),
+  patio_id:'', patio_destino_id:'', origen_tipo:'', origen_nombre:'', destino_tipo:'', destino_nombre:'',
+  operador:'', placas_tractor:'', carta_porte:'', condicion:'', adicionales:[], obs:'',
+  gps_lat:null, gps_lng:null, dirty:true
+}, o||{});
+const fotosDe = id => S.fotos.filter(f=>f.movId===id);
+const pendientes = () => S.movimientos.filter(m=>m.dirty).length + S.fotos.filter(f=>!f.ruta).length;
+const equipoDe = id => S.equipos.find(e=>e.id===id);
+
+/* ============================ CONEXIÓN ============================== */
+let SB = null, CORE = null, SESION = null;
+function cargarLib(){
+  if(window.supabase) return Promise.resolve(true);
+  return new Promise(res=>{ const s=document.createElement('script'); s.src=LIB;
+    s.onload=()=>res(true); s.onerror=()=>res(false); document.head.appendChild(s); });
+}
+async function conectar(){
+  if(!(await cargarLib())) return false;
+  SB = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    db:{schema:'core'}, auth:{persistSession:true, autoRefreshToken:true}
+  });
+  CORE = SB;
+  const { data:{ session } } = await SB.auth.getSession();
+  SESION = session || null;
+  if(!SESION){ location.href = 'index.html'; return false; }
+  const { data: perfil } = await CORE.from('perfiles').select('nombre,puesto').eq('id', SESION.user.id).maybeSingle();
+  S.yo = { id:SESION.user.id, nombre:(perfil&&perfil.nombre)||SESION.user.email, puesto:(perfil&&perfil.puesto)||'' };
+  $('#nombreUsuario').textContent = S.yo.nombre;
+  $('#puestoUsuario').textContent = S.yo.puesto;
+  return true;
+}
+$('#salir').addEventListener('click', async () => {
+  if(pendientes() && !(await preguntar(`Tienes ${pendientes()} registros sin subir. Si sales no se sincronizan hasta que vuelvas a entrar.`,'Salir'))) return;
+  if(SB) await SB.auth.signOut();
+  location.href = 'index.html';
+});
+
+/* --------------------- Catálogos y padrón --------------------------- */
+async function bajarCatalogos(aviso){
+  if(!SB || !navigator.onLine) return;
+  if(aviso) nota('Descargando catálogos…', 8000);
+  const [{data:patios}, {data:adic}, {data:tipos}, {data:marcas}] = await Promise.all([
+    CORE.from('patios').select('id,clave,nombre,activo').eq('activo',true).order('nombre'),
+    CORE.from('catalogo_adicionales').select('id,nombre,activo').eq('activo',true).order('nombre'),
+    CORE.from('tipos_equipo').select('id,nombre'),
+    CORE.from('marcas').select('id,nombre')
+  ]);
+  S.patios = patios || S.patios;
+  CAT.adicionales = (adic||[]).map(a=>({id:a.id, nombre:a.nombre}));
+  await store.bulk('patios', S.patios);
+  await store.put('kv',{k:'adicionales', v:CAT.adicionales});
+
+  const tMap = Object.fromEntries((tipos||[]).map(t=>[t.id,t.nombre]));
+  const mMap = Object.fromEntries((marcas||[]).map(m=>[m.id,m.nombre]));
+
+  const lote = 1000; let desde = 0, todos = [];
+  for(;;){
+    const { data, error } = await CORE.from('equipos')
+      .select('id,niv,placa,anio,tipo_id,marca_id,clasificacion,patio_id,patio_fisico_id,estatus_operativo,cliente_actual')
+      .eq('activo', true).order('niv').range(desde, desde+lote-1);
+    if(error) throw error;
+    todos = todos.concat(data||[]);
+    if(!data || data.length < lote) break;
+    desde += lote;
+    if(aviso) nota(`Descargando equipos… ${todos.length}`, 8000);
+  }
+  S.equipos = todos.map(e=>({
+    id:e.id, niv:e.niv, placa:e.placa||'', anio:e.anio||'', clasificacion:e.clasificacion||'',
+    tipo:tMap[e.tipo_id]||'', marca:mMap[e.marca_id]||'',
+    patio_id:e.patio_id, patio_fisico_id:e.patio_fisico_id,
+    estatus:e.estatus_operativo||'', cliente:e.cliente_actual||''
+  }));
+  await store.bulk('equipos', S.equipos);
+  await store.put('kv',{k:'ultimaCarga', v:new Date().toISOString()});
+  if(aviso) nota(`${S.equipos.length} equipos y ${S.patios.length} patios en el dispositivo`, 5000);
+}
+
+/* --------------------------- Sincronización ------------------------- */
+const SYNC = {corriendo:false, ultimo:'', error:'', fallos:[]};
+let syncT=null;
+function pedirSync(){ if(!SB) return; clearTimeout(syncT); syncT=setTimeout(()=>sincronizar(),1500); }
+async function sincronizar(){
+  if(!SB || !SESION || !navigator.onLine || SYNC.corriendo) return;
+  SYNC.corriendo=true; SYNC.error=''; SYNC.fallos=[]; pintar();
+  try{
+    await subirMovimientos();
+    await subirFotos();
+    SYNC.ultimo = stamp();
+    if(SYNC.fallos.length) SYNC.error = `No subieron ${SYNC.fallos.length} registros. Vuelve a intentar con buena señal.`;
+  }catch(err){
+    const m = (err && err.message) || '';
+    SYNC.error = m.includes('Failed to fetch') ? 'Se cortó la conexión. Lo pendiente sigue guardado en este dispositivo.' : (m||'Falló la sincronización');
+  }
+  SYNC.corriendo=false; pintar();
+}
+async function subirMovimientos(){
+  for(const m of S.movimientos.filter(x=>x.dirty && x.equipo_id)){
+    const fila = {
+      id:m.id, equipo_id:m.equipo_id, tipo_mov:m.tipo_mov, fecha:m.fecha,
+      patio_id: m.patio_id ? Number(m.patio_id) : null,
+      patio_destino_id: m.patio_destino_id ? Number(m.patio_destino_id) : null,
+      origen_tipo:m.origen_tipo||null, origen_nombre:m.origen_nombre||null,
+      destino_tipo:m.destino_tipo||null, destino_nombre:m.destino_nombre||null,
+      operador:m.operador||null, placas_tractor:m.placas_tractor||null, carta_porte:m.carta_porte||null,
+      condicion:m.condicion||null, adicionales:m.adicionales, obs:m.obs||null,
+      registrado_por:S.yo.id, gps_lat:m.gps_lat, gps_lng:m.gps_lng
+    };
+    const { error } = await CORE.from('movimientos').upsert(fila, {onConflict:'id'});
+    if(error){
+      if((error.message||'').includes('Failed to fetch')) throw error;
+      SYNC.fallos.push('movimiento '+m.niv); continue;
+    }
+    m.dirty=false; await store.put('movimientos', m);
+    aplicarLocal(m);
+  }
+}
+async function subirFotos(){
+  for(const f of S.fotos.filter(x=>!x.ruta)){
+    const padre = S.movimientos.find(m=>m.id===f.movId);
+    if(!padre){ SYNC.fallos.push('foto suelta'); continue; }
+    if(padre.dirty) continue;                       // primero sube su movimiento
+    const rec = await store.get('fotos', f.id);
+    if(!rec || !rec.blob) continue;
+    const eq = equipoDe(padre.equipo_id);
+    const ruta = `${(eq&&eq.niv)||'SIN_NIV'}/movimientos/${padre.id}/${f.id}.jpg`;
+    const { error } = await CORE.storage.from(BUCKET).upload(ruta, rec.blob, {contentType:'image/jpeg', upsert:true});
+    if(error){
+      if((error.message||'').includes('Failed to fetch')) throw error;
+      SYNC.fallos.push('foto'); continue;
+    }
+    const { error:e2 } = await CORE.from('fotos').insert({
+      id:f.id, equipo_id:padre.equipo_id,
+      patio_id: padre.patio_id ? Number(padre.patio_id) : null,
+      modulo_origen:'movimientos', etapa:padre.id, angulo:f.angulo,
+      ruta_storage:ruta, bytes:rec.blob.size, publica:false,
+      subida_por:S.yo.id, tomada_en:f.ts || new Date().toISOString()
+    });
+    if(e2 && !String(e2.message||'').includes('duplicate')){
+      if((e2.message||'').includes('Failed to fetch')) throw e2;
+      SYNC.fallos.push('foto'); continue;
+    }
+    rec.ruta=ruta; await store.put('fotos', rec); f.ruta=ruta;
+  }
+}
+/* la ubicación local se refresca al momento; el servidor hace lo mismo por su cuenta */
+async function aplicarLocal(m){
+  const e = equipoDe(m.equipo_id); if(!e) return;
+  if(m.tipo_mov==='salida')        e.patio_fisico_id = null;
+  else if(m.tipo_mov==='traspaso') e.patio_fisico_id = Number(m.patio_destino_id)||null;
+  else                             e.patio_fisico_id = Number(m.patio_id)||null;
+  if(m.tipo_mov==='salida' && m.destino_tipo==='Cliente') e.cliente = m.destino_nombre;
+  if(m.tipo_mov==='entrada') e.cliente = '';
+  await store.put('equipos', e);
+}
+window.addEventListener('online', ()=>{ nota('Conexión recuperada'); sincronizar(); });
+
+/* ============================== VISTAS ============================== */
+function pintar(){
+  ['capturar','hoy','buscar','sesion'].forEach(t=>$('#view-'+t).classList.toggle('hidden', t!==S.tab));
+  const hoyN = S.movimientos.filter(m=>(m.fecha||'').slice(0,10)===hoy()).length;
+  const pend = pendientes();
+  $('#hSub').textContent = S.patioId
+    ? `${nombrePatio(S.patioId)} · ${hoyN} movimientos hoy · ${SYNC.corriendo?'subiendo…':pend?pend+' en cola':'al día'}`
+    : 'Elige tu patio en la pestaña Sesión';
+  $('#tablero').innerHTML = tablero(hoyN, pend);
+  $('#franja').innerHTML = SYNC.error ? `<div class="franja"><p>${esc(SYNC.error)}</p>
+      <button class="btn chico" onclick="sincronizar()">Reintentar</button></div>` : '';
+  if(S.tab==='capturar') vistaCapturar();
+  if(S.tab==='hoy')      vistaHoy();
+  if(S.tab==='buscar')   vistaBuscar();
+  if(S.tab==='sesion')   vistaSesion();
+}
+function tablero(hoyN, pend){
+  const hs = S.movimientos.filter(m=>(m.fecha||'').slice(0,10)===hoy());
+  const c = t => hs.filter(m=>m.tipo_mov===t).length;
+  return `
+    <div class="cifra"><div class="n">${c('entrada')}</div><div class="t">Entradas hoy</div></div>
+    <div class="cifra"><div class="n">${c('salida')}</div><div class="t">Salidas hoy</div></div>
+    <div class="cifra"><div class="n">${c('traspaso')}</div><div class="t">Traspasos hoy</div></div>
+    <div class="cifra ${pend?'urge':''}"><div class="n">${pend}</div><div class="t">Sin subir</div></div>`;
+}
+function vistaCapturar(){
+  const listo = S.patioId && S.equipos.length;
+  $('#view-capturar').innerHTML = `
+    ${S.patioId ? '' : `<div class="banner b-warn">Antes de capturar, entra a <b>Sesión</b> y elige el patio en el que estás.</div>`}
+    ${S.equipos.length ? '' : `<div class="banner b-warn">Todavía no se descarga el padrón de equipos. Entra a <b>Sesión</b> y toca Actualizar padrón con señal.</div>`}
+    <div class="big">
+      <button class="ent" onclick="nuevoMovimiento('entrada')" ${listo?'':'disabled'}>
+        <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>Entrada</button>
+      <button class="sal" onclick="nuevoMovimiento('salida')" ${listo?'':'disabled'}>
+        <svg viewBox="0 0 24 24"><path d="M12 21V9M7 14l5-5 5 5M4 4h16"/></svg>Salida</button>
+    </div>
+    <div class="big" style="grid-template-columns:1fr">
+      <button class="tra" onclick="nuevoMovimiento('traspaso')" ${listo?'':'disabled'}>
+        <svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Traspaso a otro patio</button>
+    </div>
+    <h2 class="sec">Últimos movimientos</h2>
+    ${S.movimientos.slice(0,6).map(itemMov).join('') || '<div class="vacio">Todavía no hay movimientos registrados en este dispositivo.</div>'}
+    <div style="height:20px"></div>`;
+}
+function itemMov(m){
+  const t = {entrada:['t-ent','Entrada'],salida:['t-sal','Salida'],traspaso:['t-tra','Traspaso']}[m.tipo_mov]||['t-lev',m.tipo_mov];
+  const e = equipoDe(m.equipo_id) || {};
+  const contra = m.tipo_mov==='entrada' ? m.origen_nombre
+               : m.tipo_mov==='traspaso' ? nombrePatio(m.patio_destino_id) : m.destino_nombre;
+  return `<button class="item ${m.tipo_mov}" onclick="verUnidad('${m.equipo_id}')">
+    <div class="niv">${esc(m.niv || e.niv || '')}</div>
+    <div class="meta">${esc([e.tipo, nombrePatio(m.patio_id), contra].filter(Boolean).join(' · '))}</div>
+    <div class="foot"><span class="tag ${t[0]}">${t[1]}</span>
+      ${m.dirty?'<span class="tag t-pend">Sin subir</span>':''}
+      <span class="sp"></span>
+      <span class="count">${fCorta(m.fecha)} · ${fotosDe(m.id).length} fotos</span></div></button>`;
+}
+function vistaHoy(){
+  const hs = S.movimientos.filter(m=>(m.fecha||'').slice(0,10)===hoy());
+  $('#view-hoy').innerHTML = `
+    <h2 class="sec">Movimientos de hoy</h2>
+    ${hs.length ? hs.map(itemMov).join('') : '<div class="vacio">Sin movimientos hoy.</div>'}
+    <div style="height:20px"></div>`;
+}
+function vistaBuscar(){
+  const q = norm(S.busca);
+  const res = q.length>=3 ? S.equipos.filter(e=>norm(e.niv).includes(q)||norm(e.placa).includes(q)).slice(0,25) : [];
+  const g = {};
+  S.equipos.forEach(e=>{ const k = e.patio_fisico_id ? nombrePatio(e.patio_fisico_id) : '(fuera de patio)'; g[k]=(g[k]||0)+1; });
+  $('#view-buscar').innerHTML = `
+    <div class="buscador" style="margin-top:12px"><input id="qBuscar" placeholder="NIV o placas" value="${esc(S.busca)}"></div>
+    ${q.length>=3
+      ? (res.length ? res.map(itemEquipo).join('') : '<div class="vacio">Sin coincidencias en el padrón descargado.</div>')
+      : `<h2 class="sec">Dónde está la flota</h2>
+         <div class="card tight"><table class="mini">
+         ${Object.entries(g).sort((a,b)=>b[1]-a[1]).slice(0,25).map(([p,n])=>`<tr><td>${esc(p)}</td><td>${n}</td></tr>`).join('')}
+         <tr><td><b>Total</b></td><td>${S.equipos.length}</td></tr></table></div>`}
+    <div style="height:20px"></div>`;
+  const el=$('#qBuscar');
+  el.oninput = e => { S.busca=e.target.value; const p=e.target.selectionStart; vistaBuscar(); const n=$('#qBuscar'); n.focus(); n.setSelectionRange(p,p); };
+}
+function itemEquipo(e){
+  return `<button class="item ${e.patio_fisico_id?'entrada':'salida'}" onclick="verUnidad('${e.id}')">
+    <div class="niv">${esc(e.niv)}</div>
+    <div class="meta">${esc([e.tipo,e.marca,e.anio,e.placa].filter(Boolean).join(' · '))}</div>
+    <div class="foot"><span class="tag ${e.patio_fisico_id?'t-ent':'t-sal'}">${esc(e.patio_fisico_id?nombrePatio(e.patio_fisico_id):e.estatus||'fuera de patio')}</span>
+      ${e.cliente?`<span class="count">${esc(e.cliente)}</span>`:''}</div></button>`;
+}
+function vistaSesion(){
+  $('#view-sesion').innerHTML = `
+    <h2 class="sec">Este dispositivo</h2>
+    <div class="card">
+      <label><span class="lbl">Patio donde estoy</span>
+        <select id="sPatio">${opcionesPatio(S.patioId)}</select></label>
+      <p class="hint">Se usa como patio de cada movimiento. Cámbialo si te trasladas a otro patio.</p>
+      <button class="btn navy ancho" style="margin-top:12px" onclick="guardarPatio()">Guardar</button>
+    </div>
+    <h2 class="sec">Datos descargados</h2>
+    <div class="card">
+      <table class="mini">
+        <tr><td>Equipos</td><td>${S.equipos.length}</td></tr>
+        <tr><td>Patios</td><td>${S.patios.length}</td></tr>
+        <tr><td>Adicionales</td><td>${CAT.adicionales.length}</td></tr>
+        <tr><td>Sin subir</td><td>${pendientes()}</td></tr>
+        <tr><td>Última sincronización</td><td style="font-family:var(--sans)">${esc(SYNC.ultimo||'—')}</td></tr>
+      </table>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="btn navy" onclick="sincronizar()">Sincronizar</button>
+        <button class="btn claro" onclick="bajarCatalogos(true).then(pintar)">Actualizar padrón</button>
+      </div>
+    </div>
+    <h2 class="sec">Versión</h2>
+    <div class="card">
+      <table class="mini"><tr><td>Módulo</td><td>${APP_VERSION}</td></tr></table>
+      <button class="btn navy ancho" style="margin-top:12px" onclick="forzarActualizacion()">Buscar actualización</button>
+    </div>
+    <div style="height:20px"></div>`;
+}
+async function guardarPatio(){
+  S.patioId = $('#sPatio').value;
+  await store.put('kv',{k:'patioId', v:S.patioId});
+  pintar(); nota(S.patioId ? 'Patio guardado: '+nombrePatio(S.patioId) : 'Sin patio definido');
+}
+async function forzarActualizacion(){
+  nota('Buscando versión nueva…');
+  try{
+    if('serviceWorker' in navigator){ for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); }
+    if(window.caches){ for(const k of await caches.keys()) await caches.delete(k); }
+  }catch(e){}
+  location.reload(true);
+}
+
+/* ======================= FICHA DE MOVIMIENTO ======================== */
+function nuevoMovimiento(tipo){
+  const m = nuevoMov({tipo_mov:tipo, patio_id:S.patioId});
+  S.movimientos.unshift(m); S.movId=m.id;
+  pintarMov(); $('#sheetMov').classList.add('open'); document.body.style.overflow='hidden';
+}
+const movActual = () => S.movimientos.find(m=>m.id===S.movId);
+function cerrarMov(){
+  const m = movActual();
+  if(m && m.dirty && !m.equipo_id) S.movimientos = S.movimientos.filter(x=>x.id!==m.id);
+  $('#sheetMov').classList.remove('open'); document.body.style.overflow=''; S.movId=null; pintar();
+}
+function pintarMov(){
+  const m = movActual(); if(!m) return;
+  const es = m.tipo_mov;
+  const tags = {entrada:'Entrada',salida:'Salida',traspaso:'Traspaso'}[es];
+  $('#movTag').innerHTML = `<span class="sello oscuro" style="font-size:12px">${tags}</span>`;
+  const e = equipoDe(m.equipo_id);
+  $('#movBody').innerHTML = `
+    <h2 class="sec">Equipo</h2>
+    <div class="card">
+      ${e ? `
+        <div class="row"><div style="flex:1">
+          <div class="mono" style="font-size:16px;font-weight:700">${esc(e.niv)}</div>
+          <div class="hint">${esc([e.tipo,e.marca,e.anio,e.placa].filter(Boolean).join(' · '))||'Sin datos en el padrón'}</div>
+          <div class="hint">${e.patio_fisico_id ? 'El sistema lo tiene en <b>'+esc(nombrePatio(e.patio_fisico_id))+'</b>'
+            : 'Sin patio físico · '+esc(e.estatus||'')}${e.cliente?' · '+esc(e.cliente):''}</div>
+        </div><button class="btn claro chico" onclick="quitarEquipo()">Cambiar</button></div>
+        ${avisoUbicacion(m,e)}`
+      : `<label><span class="lbl">NIV o placas</span>
+           <input class="mono" id="mNiv" maxlength="24" autocapitalize="characters" placeholder="Escribe al menos 3 caracteres" oninput="buscarEquipo(this.value)"></label>
+         <div id="resNiv"></div>`}
+    </div>
+
+    ${e ? `
+    <h2 class="sec">Movimiento</h2>
+    <div class="card">
+      <div class="grid2">
+        <label><span class="lbl">Patio</span><select id="mPatio">${opcionesPatio(m.patio_id||S.patioId)}</select></label>
+        <label><span class="lbl">Fecha y hora</span><input type="datetime-local" id="mFecha" value="${esc(paraInput(m.fecha))}"></label>
+      </div>
+      ${es==='entrada' ? `
+        <label><span class="lbl">Procedencia</span><select id="mOrigenTipo">${opciones(CAT.origen, m.origen_tipo||'Cliente')}</select></label>
+        <label><span class="lbl">Quién lo entrega</span><input id="mOrigenNombre" value="${esc(m.origen_nombre)}" placeholder="Cliente, fabricante o patio de procedencia"></label>`
+      : es==='salida' ? `
+        <label><span class="lbl">Destino</span><select id="mDestinoTipo">${opciones(CAT.destino, m.destino_tipo||'Cliente')}</select></label>
+        <label><span class="lbl">Quién lo recibe</span><input id="mDestinoNombre" value="${esc(m.destino_nombre)}" placeholder="Cliente, taller o comprador"></label>`
+      : `<label><span class="lbl">Patio destino</span><select id="mPatioDestino">${opcionesPatio(m.patio_destino_id)}</select></label>`}
+      <div class="grid2">
+        <label><span class="lbl">Operador</span><input id="mOperador" value="${esc(m.operador)}"></label>
+        <label><span class="lbl">Placas del tractor</span><input id="mPlacas" value="${esc(m.placas_tractor)}" autocapitalize="characters"></label>
+      </div>
+      <label><span class="lbl">Carta porte o folio</span><input id="mCarta" value="${esc(m.carta_porte)}"></label>
+      <label><span class="lbl">Condición del equipo</span>
+        <select id="mCondicion"><option value="">— Seleccionar —</option>${opciones(CAT.estatusFisico, m.condicion)}</select></label>
+      <label><span class="lbl">Observaciones</span><textarea id="mObs" placeholder="Daños, faltantes, detalles a reportar…">${esc(m.obs)}</textarea></label>
+      <div class="row" style="margin-top:10px">
+        <button class="btn claro chico" onclick="tomarGPS()">Ubicación GPS</button>
+        <span class="hint" id="gpsTxt">${m.gps_lat?`${m.gps_lat.toFixed(5)}, ${m.gps_lng.toFixed(5)}`:'sin coordenada'}</span>
+      </div>
+    </div>
+
+    <h2 class="sec">Adicionales con los que ${es==='salida'?'sale':'llega'}</h2>
+    <div class="card tight">
+      <div id="listaAdic">${pintarAdicionales(m)}</div>
+      <div class="row" style="margin-top:8px">
+        <div style="flex:1"><select id="selAdic"><option value="">+ Agregar adicional…</option>
+          ${CAT.adicionales.map(a=>`<option value="${a.id}">${esc(a.nombre)}</option>`).join('')}</select></div>
+        <button class="btn chico" onclick="agregarAdicional()">Agregar</button>
+      </div>
+      <div id="cotejo">${cotejo(m)}</div>
+    </div>
+
+    <h2 class="sec">Fotografías</h2>
+    <div class="card">
+      <div class="angles">${CAT.angulos.map(a=>botonAngulo(m.id,a)).join('')}</div>
+      <div class="thumbs" id="thumbsMov">${pintarThumbs(m.id)}</div>
+      <div class="row" style="margin-top:10px">
+        <select id="angGal" style="flex:1">${opciones(CAT.angulos,'Documentos')}</select>
+        <button class="btn claro chico" onclick="pedirGaleria('${m.id}','angGal')">Desde galería</button>
+      </div>
+    </div>` : ''}
+    <div style="height:24px"></div>`;
+  if($('#mNiv')) $('#mNiv').focus();
+}
+const paraInput = iso => { const d=new Date(iso); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,16); };
+function avisoUbicacion(m,e){
+  const aqui = Number(m.patio_id||S.patioId);
+  if(m.tipo_mov==='entrada' && e.patio_fisico_id)
+    return `<div class="banner b-warn" style="margin-bottom:0">El sistema ya lo tiene en <b>${esc(nombrePatio(e.patio_fisico_id))}</b>. Al registrar la entrada aquí, se corrige su ubicación.</div>`;
+  if(m.tipo_mov!=='entrada' && !e.patio_fisico_id)
+    return `<div class="banner b-warn" style="margin-bottom:0">El sistema no lo tiene en ningún patio (${esc(e.estatus||'fuera')}). Revisa si falta registrar su entrada.</div>`;
+  if(m.tipo_mov!=='entrada' && e.patio_fisico_id && e.patio_fisico_id !== aqui)
+    return `<div class="banner b-warn" style="margin-bottom:0">El sistema lo tiene en <b>${esc(nombrePatio(e.patio_fisico_id))}</b>, no en ${esc(nombrePatio(aqui))}.</div>`;
+  return '';
+}
+function buscarEquipo(v){
+  const q = norm(v), cont = $('#resNiv'); if(!cont) return;
+  if(q.length<3){ cont.innerHTML=''; return; }
+  const res = S.equipos.filter(e=>norm(e.niv).includes(q)||norm(e.placa).includes(q)).slice(0,6);
+  cont.innerHTML = res.length ? res.map(e=>`
+      <button class="item ${e.patio_fisico_id?'entrada':'salida'}" style="margin-top:6px" onclick="elegirEquipo('${e.id}')">
+        <div class="niv">${esc(e.niv)}</div>
+        <div class="meta">${esc([e.tipo,e.marca,e.patio_fisico_id?nombrePatio(e.patio_fisico_id):e.estatus].filter(Boolean).join(' · '))}</div>
+      </button>`).join('')
+    : `<div class="banner b-warn">Ese NIV no está en el padrón. Si es un equipo nuevo, primero hay que darlo de alta en el inventario de la plataforma.</div>`;
+}
+async function elegirEquipo(id){
+  const m = movActual(); if(!m) return;
+  const e = equipoDe(id); if(!e) return;
+  m.equipo_id = id; m.niv = e.niv;
+  if(m.tipo_mov!=='entrada') await prellenarAdicionales(m);
+  pintarMov();
+}
+function quitarEquipo(){ const m=movActual(); m.equipo_id=''; m.niv=''; m.adicionales=[]; delete m._ref; pintarMov(); }
+
+/* --------------------- Adicionales y cotejo ------------------------- */
+function pintarAdicionales(m){
+  if(!m.adicionales.length) return `<p class="hint" style="padding:4px 2px">Sin adicionales registrados.</p>`;
+  return m.adicionales.map((a,i)=>`
+    <div class="add-row">
+      <div class="row"><span style="font-weight:700;font-size:14px">${esc(a.nombre)}</span><span class="sp"></span>
+        <div class="stepper"><button onclick="qty(${i},-1)">−</button>
+          <input inputmode="numeric" value="${esc(a.cantidad)}" onchange="setQty(${i},this.value)">
+          <button onclick="qty(${i},1)">+</button></div>
+        <button class="btn claro chico" onclick="quitarAdicional(${i})">✕</button></div>
+      <div class="grid2" style="margin-top:6px">
+        <label><span class="lbl">Marca o medida</span><input value="${esc(a.detalle||'')}" onchange="setAdic(${i},'detalle',this.value)"></label>
+        <label><span class="lbl">Condición</span><select onchange="setAdic(${i},'condicion',this.value)">${opciones(CAT.condiciones,a.condicion)}</select></label>
+      </div>
+    </div>`).join('');
+}
+function agregarAdicional(){
+  const sel = $('#selAdic'); const id = sel.value; if(!id) return;
+  const cat = CAT.adicionales.find(a=>String(a.id)===String(id)); if(!cat) return;
+  const m = movActual();
+  m.adicionales.push({adicional_id:cat.id, nombre:cat.nombre, cantidad:1, detalle:'', condicion:'Usado - Bueno'});
+  sel.value=''; refrescarAdic(m);
+}
+function quitarAdicional(i){ const m=movActual(); m.adicionales.splice(i,1); refrescarAdic(m); }
+function qty(i,d){ const m=movActual(); m.adicionales[i].cantidad=Math.max(0,(+m.adicionales[i].cantidad||0)+d); refrescarAdic(m); }
+function setQty(i,v){ const m=movActual(); m.adicionales[i].cantidad=Math.max(0,parseInt(v)||0); $('#cotejo').innerHTML=cotejo(m); }
+function setAdic(i,k,v){ movActual().adicionales[i][k]=v; }
+function refrescarAdic(m){ $('#listaAdic').innerHTML=pintarAdicionales(m); $('#cotejo').innerHTML=cotejo(m); }
+
+/* En salidas y traspasos arranca con lo que traía la última vez */
+async function prellenarAdicionales(m){
+  if(m.adicionales.length) return;
+  let prev = S.movimientos.filter(x=>x.equipo_id===m.equipo_id && x.id!==m.id)
+              .sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''))[0] || null;
+  if(SB && navigator.onLine){
+    try{
+      const { data } = await CORE.from('movimientos').select('tipo_mov,fecha,adicionales')
+        .eq('equipo_id', m.equipo_id).order('fecha',{ascending:false}).limit(1);
+      const r = data && data[0];
+      if(r && (!prev || (r.fecha||'') > (prev.fecha||''))) prev = r;
+    }catch(e){}
+  }
+  if(prev && Array.isArray(prev.adicionales) && prev.adicionales.length){
+    m.adicionales = prev.adicionales.map(a=>Object.assign({},a));
+    m._ref = prev.adicionales;
+    m._refTexto = `${prev.tipo_mov} del ${fCorta(prev.fecha)}`;
+  }
+}
+function cotejo(m){
+  if(!m._ref) return '';
+  const suma = arr => { const g={}; (arr||[]).forEach(a=>{ const k=norm(a.nombre); g[k]=(g[k]||0)+(+a.cantidad||0); }); return g; };
+  const antes=suma(m._ref), ahora=suma(m.adicionales), dif=[];
+  new Set([...Object.keys(antes),...Object.keys(ahora)]).forEach(k=>{
+    const a=antes[k]||0, b=ahora[k]||0;
+    if(a!==b){
+      const nom=(m._ref.find(x=>norm(x.nombre)===k)||m.adicionales.find(x=>norm(x.nombre)===k)).nombre;
+      dif.push(`${nom}: ${a} → ${b}`);
+    }
+  });
+  return dif.length
+    ? `<div class="banner b-warn" style="margin-bottom:0"><b>Difiere de ${esc(m._refTexto||'el registro anterior')}:</b><br>${dif.map(esc).join('<br>')}</div>`
+    : `<div class="banner b-ok" style="margin-bottom:0">Coincide con ${esc(m._refTexto||'el registro anterior')}.</div>`;
+}
+
+/* ------------------------------ Fotos ------------------------------- */
+let fotoDestino=null;
+function botonAngulo(movId, ang){
+  const fs = S.fotos.filter(f=>f.movId===movId && f.angulo===ang), ult = fs[fs.length-1];
+  return `<div class="angle ${fs.length?'has':''}" onclick="pedirFoto('${movId}','${esc(ang)}')">
+    ${fs.length?`<span class="badge">${fs.length}</span>`:''}
+    ${ult&&ult.thumb?`<img src="${ult.thumb}" alt="">`:`<svg viewBox="0 0 24 24"><path d="M3 8h4l1.5-2h7L17 8h4v11H3z"/><circle cx="12" cy="13" r="3.4"/></svg>`}
+    <span class="lbl">${esc(ang)}</span></div>`;
+}
+function pedirFoto(movId,ang){ fotoDestino={movId,angulo:ang}; $('#fileFoto').value=''; $('#fileFoto').click(); }
+function pedirGaleria(movId,idSel){ const s=$('#'+idSel); fotoDestino={movId,angulo:s?s.value:'Documentos'}; $('#fileGaleria').value=''; $('#fileGaleria').click(); }
+async function recibirImagenes(ev){
+  const files=[...(ev.target.files||[])]; if(!files.length||!fotoDestino) return;
+  nota('Procesando…');
+  for(const file of files){
+    try{
+      const {blob,thumb} = await comprimir(file);
+      const rec = {id:uid(), movId:fotoDestino.movId, angulo:fotoDestino.angulo, blob, thumb, ruta:'', ts:new Date().toISOString()};
+      await store.put('fotos', rec);
+      S.fotos.push({id:rec.id, movId:rec.movId, angulo:rec.angulo, thumb, ruta:'', ts:rec.ts});
+    }catch(e){ nota('No se pudo procesar una imagen'); }
+  }
+  const m = movActual();
+  if(m){
+    const c=$('#movBody .angles'); if(c) c.innerHTML=CAT.angulos.map(a=>botonAngulo(m.id,a)).join('');
+    const t=$('#thumbsMov'); if(t) t.innerHTML=pintarThumbs(m.id);
+  }
+  pedirSync();
+}
+$('#fileFoto').onchange = recibirImagenes;
+$('#fileGaleria').onchange = recibirImagenes;
+function pintarThumbs(movId){
+  return fotosDe(movId).map(f=>`<div class="thumb"><img src="${f.thumb}" onclick="verFoto('${f.id}')" alt="${esc(f.angulo)}">
+    ${f.ruta?'':`<button onclick="borrarFoto('${f.id}')">✕</button>`}</div>`).join('');
+}
+async function borrarFoto(id){
+  await store.del('fotos', id); S.fotos = S.fotos.filter(f=>f.id!==id);
+  const m=movActual(); if(m){ $('#thumbsMov').innerHTML=pintarThumbs(m.id);
+    $('#movBody .angles').innerHTML=CAT.angulos.map(a=>botonAngulo(m.id,a)).join(''); }
+}
+function comprimir(file, max=1440, q=0.72){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), img=new Image();
+    img.onload=()=>{
+      const r=Math.min(1,max/Math.max(img.width,img.height));
+      const w=Math.round(img.width*r), h=Math.round(img.height*r);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      const tv=document.createElement('canvas'), tr=Math.min(1,220/Math.max(w,h));
+      tv.width=Math.round(w*tr); tv.height=Math.round(h*tr);
+      tv.getContext('2d').drawImage(cv,0,0,tv.width,tv.height);
+      const thumb=tv.toDataURL('image/jpeg',0.6);
+      cv.toBlob(b=>{ URL.revokeObjectURL(url); b?res({blob:b,thumb}):rej(); },'image/jpeg',q);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(); };
+    img.src=url;
+  });
+}
+async function verFoto(id){
+  const rec = await store.get('fotos', id);
+  let src=null,url=null;
+  if(rec&&rec.blob){ url=URL.createObjectURL(rec.blob); src=url; }
+  else if(rec&&rec.ruta&&SB&&navigator.onLine){
+    nota('Bajando la imagen…');
+    try{ const {data}=await CORE.storage.from(BUCKET).download(rec.ruta); if(data){ url=URL.createObjectURL(data); src=url; } }catch(e){}
+  }
+  if(!src){ nota('No se pudo abrir la imagen'); return; }
+  const ov=document.createElement('div'); ov.className='visor';
+  ov.innerHTML=`<div class="visor-top"><span>${esc(rec.angulo||'')} · ${esc(fCorta(rec.ts))}</span><button>✕</button></div>
+    <div class="visor-img"><img src="${src}" alt=""></div><div class="visor-pie">Toca la imagen para acercar</div>`;
+  ov.querySelector('button').onclick=()=>{ov.remove(); if(url) URL.revokeObjectURL(url);};
+  ov.querySelector('img').onclick=function(){ this.classList.toggle('zoom'); };
+  document.body.appendChild(ov);
+}
+function tomarGPS(){
+  if(!navigator.geolocation){ nota('Sin GPS disponible'); return; }
+  nota('Obteniendo ubicación…');
+  navigator.geolocation.getCurrentPosition(p=>{
+    const m=movActual(); m.gps_lat=p.coords.latitude; m.gps_lng=p.coords.longitude;
+    $('#gpsTxt').textContent=`${m.gps_lat.toFixed(5)}, ${m.gps_lng.toFixed(5)}`;
+  }, ()=>nota('No se pudo obtener la ubicación'), {enableHighAccuracy:true, timeout:9000});
+}
+
+/* ----------------------------- Guardar ------------------------------ */
+async function guardarMov(){
+  const m = movActual(); if(!m) return;
+  if(!m.equipo_id){ nota('Primero elige el equipo'); return; }
+  m.patio_id = $('#mPatio').value;
+  if(!m.patio_id){ nota('Falta el patio'); return; }
+  if($('#mFecha').value) m.fecha = new Date($('#mFecha').value).toISOString();
+  if(m.tipo_mov==='entrada'){ m.origen_tipo=$('#mOrigenTipo').value; m.origen_nombre=$('#mOrigenNombre').value.trim(); }
+  if(m.tipo_mov==='salida'){
+    m.destino_tipo=$('#mDestinoTipo').value; m.destino_nombre=$('#mDestinoNombre').value.trim();
+    if(!m.destino_nombre){ nota('Captura a quién se entrega'); return; }
+  }
+  if(m.tipo_mov==='traspaso'){
+    m.patio_destino_id=$('#mPatioDestino').value;
+    if(!m.patio_destino_id){ nota('Falta el patio destino'); return; }
+    if(String(m.patio_destino_id)===String(m.patio_id)){ nota('El patio destino no puede ser el mismo'); return; }
+  }
+  m.operador=$('#mOperador').value.trim(); m.placas_tractor=$('#mPlacas').value.trim().toUpperCase();
+  m.carta_porte=$('#mCarta').value.trim(); m.condicion=$('#mCondicion').value; m.obs=$('#mObs').value.trim();
+  m.dirty=true;
+  await store.put('movimientos', m);
+  await aplicarLocal(m);
+  $('#sheetMov').classList.remove('open'); document.body.style.overflow=''; S.movId=null;
+  pintar(); nota('Movimiento registrado'); pedirSync();
+}
+
+/* ======================= HISTÓRICO POR EQUIPO ======================= */
+async function verUnidad(equipoId){
+  const e = equipoDe(equipoId) || {};
+  $('#unidadBody').innerHTML = '<div class="cargando">Cargando…</div>';
+  $('#sheetUnidad').classList.add('open'); document.body.style.overflow='hidden';
+  let movs = S.movimientos.filter(m=>m.equipo_id===equipoId);
+  if(SB && navigator.onLine){
+    try{
+      const { data } = await CORE.from('movimientos').select('*').eq('equipo_id', equipoId).order('fecha',{ascending:false}).limit(60);
+      const ids = new Set(movs.map(m=>m.id));
+      movs = movs.concat((data||[]).filter(r=>!ids.has(r.id)));
+    }catch(err){}
+  }
+  movs.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  const tipos = {entrada:['ok','Entrada'],salida:['bad','Salida'],traspaso:['warn','Traspaso'],levantamiento:['','Levantamiento'],correccion:['','Corrección']};
+  $('#unidadBody').innerHTML = `
+    <h2 class="sec">Equipo</h2>
+    <div class="card">
+      <div class="mono" style="font-size:17px;font-weight:700">${esc(e.niv||'')}</div>
+      <div class="hint">${esc([e.tipo,e.marca,e.anio,e.placa].filter(Boolean).join(' · '))}</div>
+      <table class="mini" style="margin-top:10px">
+        <tr><td>Dónde está</td><td style="font-family:var(--sans)">${esc(e.patio_fisico_id?nombrePatio(e.patio_fisico_id):(e.estatus||'—'))}</td></tr>
+        ${e.cliente?`<tr><td>Cliente</td><td style="font-family:var(--sans)">${esc(e.cliente)}</td></tr>`:''}
+        <tr><td>Movimientos</td><td>${movs.length}</td></tr>
+      </table>
+    </div>
+    <h2 class="sec">Histórico</h2>
+    <div class="card">
+      ${movs.length ? `<ul class="linea">${movs.map(m=>{
+        const t = tipos[m.tipo_mov]||['', m.tipo_mov];
+        const contra = m.tipo_mov==='entrada' ? m.origen_nombre
+                     : m.tipo_mov==='traspaso' ? nombrePatio(m.patio_destino_id) : m.destino_nombre;
+        const adic = (m.adicionales||[]).map(a=>`${a.nombre} (${a.cantidad})`).join(', ');
+        return `<li class="${t[0]}">
+          <span class="t">${t[1]}${contra?' · '+esc(contra):''}</span>
+          <span class="m">${esc(fCorta(m.fecha))} · ${esc(nombrePatio(m.patio_id))}${m.dirty?' · sin subir':''}</span>
+          ${adic?`<div class="c">${esc(adic)}</div>`:''}
+          ${m.obs?`<div class="c">${esc(m.obs)}</div>`:''}
+        </li>`;
+      }).join('')}</ul>` : '<p class="vacio">Sin movimientos registrados.</p>'}
+    </div>
+    <div style="height:24px"></div>`;
+}
+function cerrarUnidad(){ $('#sheetUnidad').classList.remove('open'); document.body.style.overflow=''; }
+
+/* ============================== ARRANQUE ============================ */
+$$('nav.tabs button').forEach(b=>b.onclick=()=>{
+  S.tab=b.dataset.tab; $$('nav.tabs button').forEach(x=>x.classList.toggle('on',x===b)); pintar();
+});
+(async function init(){
+  await abrirDB();
+  const kp = await store.get('kv','patioId');     S.patioId = (kp&&kp.v)||'';
+  const ka = await store.get('kv','adicionales'); CAT.adicionales = (ka&&ka.v)||[];
+  S.patios      = await store.all('patios');
+  S.equipos     = await store.all('equipos');
+  S.movimientos = (await store.all('movimientos')).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  S.fotos       = (await store.all('fotos')).map(f=>({id:f.id, movId:f.movId, angulo:f.angulo, thumb:f.thumb, ruta:f.ruta||'', ts:f.ts}));
+  if(!S.patioId) S.tab='sesion';
+  pintar();
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    try{ await navigator.serviceWorker.register('sw-movimientos.js'); }catch(e){}
+  }
+  if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(e){} }
+  if(await conectar()){
+    if(!S.equipos.length) await bajarCatalogos(true);
+    else bajarCatalogos(false).catch(()=>{});
+    pintar(); sincronizar();
+    setInterval(()=>{ if(navigator.onLine) sincronizar(); }, 60000);
+  }
+})();
+
+</script>
+</body>
+</html>
