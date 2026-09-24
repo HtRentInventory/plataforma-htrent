@@ -3,11 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Autorización de gastos y facturas · Plataforma HT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira:ital,wght@1,700;1,800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="ht.css?v=2026-09-24a">
+<link rel="stylesheet" href="ht.css?v=2026-09-24b">
 </head>
 <body>
 
@@ -25,7 +28,7 @@
 </header>
 
 <main>
-  <a class="migaja" href="index.html">← Volver a módulos</a>
+  <a class="migaja" href="index.html?v=2026-09-24b">← Volver a módulos</a>
   <h1 id="titulo">Autorización de gastos y facturas</h1>
   <span class="eyebrow" id="subtitulo">Operaciones · corte lunes y miércoles a las 12:00</span>
 
@@ -93,7 +96,7 @@ const estado = { yo:null, lista:[], personas:{}, proveedores:[], tab:'pend', q:'
 
 /* ---------------- arranque ---------------- */
 const { data:{ session } } = await core.auth.getSession();
-if(!session){ location.href = 'index.html'; }
+if(!session){ location.href = 'index.html?v=2026-09-24b'; }
 const usuario = session.user;
 
 const { data: perfil } = await core.from('perfiles').select('nombre,puesto').eq('id', usuario.id).maybeSingle();
@@ -815,7 +818,7 @@ $('concentrado').addEventListener('click', verConcentrado);
 $('q').addEventListener('input', e => { estado.q = e.target.value; pintar(); });
 $('fTipo').addEventListener('change', e => { estado.fTipo = e.target.value; pintar(); });
 $('fEstado').addEventListener('change', e => { estado.fEstado = e.target.value; pintar(); });
-$('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html'; });
+$('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html?v=2026-09-24b'; });
 
 if(SOLO_FACTURAS){
   document.title = 'Autorización de facturas · Plataforma HT';
