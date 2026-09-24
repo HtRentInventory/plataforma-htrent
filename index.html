@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira:ital,wght@1,700;1,800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="ht.css">
+<link rel="stylesheet" href="ht.css?v=2026-09-24a">
 </head>
 <body>
 
@@ -88,6 +88,10 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON, {
 const $ = id => document.getElementById(id);
 const acceso = $('acceso'), app = $('app'), aviso = $('avisoAcceso');
 
+/* Cambia esta versión cada vez que se suba una página nueva:
+   obliga al navegador de todos a traer la versión actualizada. */
+const VERSION = '2026-09-24a';
+
 const DESTINOS = {
   clientes:    { nombre:'Servicio a Clientes',      url:'https://htrentinventory.github.io/seguimiento-clientes-equipo/' },
   documentos:  { nombre:'Documentos y expedientes', url:null },
@@ -164,9 +168,10 @@ async function cargarModulos(){
 
   cont.innerHTML = data.map(m => {
     const d = DESTINOS[m.clave] || { nombre:m.nombre, url:null };
-    const estado = d.url ? 'Abrir módulo' : 'En construcción';
-    const tag = d.url ? 'a' : 'button';
-    const attr = d.url ? `href="${d.url}"` : 'type="button" disabled style="opacity:.72;cursor:default"';
+    const url = d.url && !d.url.includes('://') ? `${d.url}?v=${VERSION}` : d.url;
+    const estado = url ? 'Abrir módulo' : 'En construcción';
+    const tag = url ? 'a' : 'button';
+    const attr = url ? `href="${url}"` : 'type="button" disabled style="opacity:.72;cursor:default"';
     return `<${tag} class="bahia" data-nivel="${m.nivel}" ${attr}>
       <span class="sello">${m.nivel}</span>
       <h3>${d.nombre}</h3>
