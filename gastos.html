@@ -26,8 +26,8 @@
 
 <main>
   <a class="migaja" href="index.html">← Volver a módulos</a>
-  <h1>Autorización de gastos y facturas</h1>
-  <span class="eyebrow">Operaciones · corte lunes y miércoles a las 12:00</span>
+  <h1 id="titulo">Autorización de gastos y facturas</h1>
+  <span class="eyebrow" id="subtitulo">Operaciones · corte lunes y miércoles a las 12:00</span>
 
   <div id="franja"></div>
 
@@ -46,6 +46,7 @@
     <div class="filtros">
       <input id="q" placeholder="Folio, concepto, proveedor, factura o NIV" spellcheck="false">
       <select id="fTipo"><option value="">Facturas y gastos</option><option value="factura">Solo facturas</option><option value="gasto">Solo gastos</option></select>
+      <button class="btn navy chico" id="concentrado" type="button">Concentrado para pagos</button>
       <select id="fEstado"><option value="">Todos los estatus</option><option value="en_proceso">En autorización</option><option value="devuelta">Devuelta</option><option value="autorizada">Autorizada, en lote</option><option value="enviada">Enviada a pagos</option><option value="rechazada">Rechazada</option><option value="cancelada">Cancelada</option></select>
     </div>
     <div class="resultados" id="lista"><p class="cargando">Cargando solicitudes…</p></div>
@@ -73,6 +74,9 @@ const g = core.schema('gastos');
 /* cortes de envío: 1 = lunes, 3 = miércoles, 12:00, pago al día siguiente */
 const CORTES = [{dia:1,hora:12,min:0,diasPago:1},{dia:3,hora:12,min:0,diasPago:1}];
 const TIPOS_GASTO = ['Movimiento entre patios','Reparación o mantenimiento','Gestoría y trámites','Verificaciones y permisos','Estadía en patio','Refacciones','Viáticos','Otro'];
+/* Mientras Dirección indique lo contrario, el módulo opera solo con facturas.
+   Para reactivar los gastos, cambia esta línea a false. */
+const SOLO_FACTURAS = true;
 const ESTADOS = {en_proceso:'En autorización',devuelta:'Devuelta',autorizada:'Autorizada, en lote',enviada:'Enviada a pagos',rechazada:'Rechazada',cancelada:'Cancelada'};
 
 const $ = id => document.getElementById(id);
@@ -334,7 +338,7 @@ let tipoForm='factura', editando=null, xmlDatos=null, archivos={pdf:null,xml:nul
 
 function nuevaSolicitud(src){
   editando = src || null;
-  tipoForm = src?.tipo || tipoForm;
+  tipoForm = SOLO_FACTURAS ? 'factura' : (src?.tipo || tipoForm);
   if(!src){ xmlDatos=null; archivos={pdf:null,xml:null,xmlTexto:null}; }
   const s = src || {};
   if(src) xmlDatos = src.xml_datos || null;
@@ -345,10 +349,10 @@ function nuevaSolicitud(src){
   const e = s.estadia || {};
   $('panelCuerpo').innerHTML = `
     <datalist id="catProv">${estado.proveedores.map(p=>`<option value="${esc(p.nombre)}">${esc(p.rfc||'')}</option>`).join('')}</datalist>
-    <div class="segmento" role="group">
+    ${SOLO_FACTURAS ? '' : `<div class="segmento" role="group">
       <button type="button" data-ac="tipo" data-v="factura" aria-pressed="${tipoForm==='factura'}">Pago de factura</button>
       <button type="button" data-ac="tipo" data-v="gasto" aria-pressed="${tipoForm==='gasto'}">Autorización de gasto</button>
-    </div>
+    </div>`}
     <div class="bloque"><h3>${tipoForm==='factura'?'Archivos de la factura':'Soporte del gasto'}</h3>
       <div class="campos">
         ${tipoForm==='factura'?`<label class="soltar" id="cajaXml"><input type="file" id="upXml" accept=".xml,text/xml,application/xml"><b>XML (CFDI)</b><span>Arrastra o elige el XML. Llena número, proveedor, montos, IVA y UUID.</span></label>`:''}
@@ -609,8 +613,151 @@ async function verArchivo(idAdj){
   window.open(data.signedUrl, '_blank', 'noopener');
 }
 
+
+/* ---------------- concentrado para pagos (envío manual) ---------------- */
+function cuerpoReporte(lista, l){
+  const th = 'style="background:#0B3D66;color:#fff;padding:8px;text-align:left;font-size:12px"';
+  const td = 'style="padding:8px;border-bottom:1px solid #D5DBE5;font-size:13px;vertical-align:top"';
+  const tdr = 'style="padding:8px;border-bottom:1px solid #D5DBE5;font-size:13px;text-align:right;white-space:nowrap"';
+  const fila = (k,v) => `<tr><td style="padding:3px 12px 3px 0;color:#5A6680;font-size:12px;white-space:nowrap;vertical-align:top">${k}</td><td style="padding:3px 0;font-size:13px">${v}</td></tr>`;
+  const total = lista.reduce((a,s)=>a+Number(s.total||0),0);
+  const resumen = lista.map(s=>`<tr>
+      <td ${td}><b>${esc(s.folio)}</b>${s.urgencia==='Urgente'?'<br><span style="color:#C63A2F;font-weight:bold">URGENTE</span>':''}</td>
+      <td ${td}>${esc(s.proveedor||s.gasto_tipo||'')}</td>
+      <td ${td}>${esc(s.concepto)}</td>
+      <td ${td}>${esc(s.factura_numero||'Gasto')}</td>
+      <td ${tdr}><b>${money(s.total)}</b></td></tr>`).join('');
+  const detalle = lista.map(s=>{
+    const aut = (s.historial||[]).filter(x=>/^Autoriz/.test(x.accion) && x.usuario!=='Sistema')
+      .map(x=>`${esc(x.usuario)} (${fHora(x.fecha)})`).join('<br>');
+    const e = s.estadia;
+    const archivos = (s.adjuntos||[]).map(a=>esc(`${s.folio}_${a.clase.toUpperCase()}_${a.nombre}`)).join('<br>');
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #D5DBE5;border-left:6px solid ${s.urgencia==='Urgente'?'#C63A2F':'#3CE81E'};margin:0 0 16px">
+      <tr><td style="padding:12px 14px;background:#F3F5F9">
+        <span style="font-size:16px;font-weight:bold;color:#1B2A5C">${esc(s.folio)}</span>
+        <span style="font-size:12px;background:#0B3D66;color:#fff;padding:2px 8px;margin-left:8px">${s.tipo==='factura'?'Factura':'Gasto'}</span>
+        <span style="float:right;font-size:18px;font-weight:bold;color:#1B2A5C">${money(s.total)}</span>
+      </td></tr>
+      <tr><td style="padding:10px 14px"><table cellpadding="0" cellspacing="0">
+        ${fila('Concepto', esc(s.concepto))}
+        ${s.proveedor?fila('Proveedor', `${esc(s.proveedor)}${s.rfc?` · RFC ${esc(s.rfc)}`:''}`):''}
+        ${s.factura_numero?fila('Factura', `${esc(s.factura_numero)}${s.factura_fecha?` del ${fDia(s.factura_fecha)}`:''}`):''}
+        ${s.factura_uuid?fila('Folio fiscal', esc(s.factura_uuid)):''}
+        ${s.gasto_tipo?fila('Tipo de gasto', esc(s.gasto_tipo)):''}
+        ${fila('Importes', `Subtotal ${money(s.subtotal)} · IVA ${s.iva_pct}% ${money(s.iva)}${Number(s.retenciones)?` · Retenciones −${money(s.retenciones)}`:''} · <b>Total ${money(s.total)}</b>`)}
+        ${e?.total?fila('Estadía', `${money(e.total)} estimados en ${esc(e.destino||'patio destino')} (${money(e.costoDia)} por día, ${e.dias} días)`):''}
+        ${(s.nivs||[]).length?fila(`NIVs (${s.nivs.length})`, `<span style="font-family:Consolas,monospace;font-size:12px">${s.nivs.map(esc).join(', ')}</span>`):''}
+        ${s.justificacion?fila(s.tipo==='gasto'?'Justificación':'Comentarios', esc(s.justificacion)):''}
+        ${fila('Solicitó', `${esc(s.solicitante_nombre||'')}${s.solicitante_puesto?`, ${esc(s.solicitante_puesto)}`:''} (${fHora(s.creado)})`)}
+        ${fila('Autorizaron', aut||'—')}
+        ${s.fecha_requerida?fila('Fecha requerida', fDia(s.fecha_requerida)):''}
+        ${fila('Archivos', archivos||'Sin archivos')}
+      </table></td></tr></table>`;
+  }).join('');
+  return `<div style="font-family:Segoe UI,Arial,sans-serif;color:#15203B;max-width:860px">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0B3D66;border-bottom:5px solid #3CE81E">
+    <tr><td style="padding:16px 20px">
+      <div style="font-size:22px;font-weight:bold;font-style:italic;color:#fff">Autorización de ${SOLO_FACTURAS?'Facturas':'Gastos y Facturas'}</div>
+      <div style="font-size:13px;color:#B9C8DC">Reporte de pagos autorizados · ${esc(fHora(new Date().toISOString()))}</div>
+    </td><td style="padding:16px 20px;text-align:right;font-size:22px;font-weight:bold;font-style:italic;color:#3CE81E">HT RENT &gt;</td></tr>
+  </table>
+  <p style="font-size:15px;margin:18px 0">Se envían <b>${lista.length}</b> ${lista.length===1?'solicitud autorizada':'solicitudes autorizadas'} por Operaciones para su pago el <b>${esc(fLargo(l.pago))}</b>, por un total de <b style="font-size:17px">${money(total)}</b>.</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:22px">
+    <tr><th ${th}>Folio</th><th ${th}>Proveedor</th><th ${th}>Concepto</th><th ${th}>Factura</th><th ${th} align="right">Total</th></tr>
+    ${resumen}
+    <tr><td colspan="4" style="padding:10px 8px;text-align:right;font-weight:bold">Total del lote</td><td style="padding:10px 8px;text-align:right;font-weight:bold;font-size:15px;white-space:nowrap">${money(total)}</td></tr>
+  </table>
+  <div style="font-size:16px;font-weight:bold;color:#1B2A5C;margin:0 0 10px">Detalle por solicitud</div>
+  ${detalle}</div>`;
+}
+
+async function verConcentrado(){
+  const lista = estado.lista.filter(s=>s.estado==='autorizada')
+    .sort((a,b)=>(b.urgencia==='Urgente')-(a.urgencia==='Urgente') || String(a.folio).localeCompare(String(b.folio)));
+  const l = siguienteCorte(new Date());
+  estado.abierto = {tipo:'concentrado'};
+  $('panelTitulo').textContent = 'Concentrado para pagos';
+  if(!lista.length){
+    $('panelCuerpo').innerHTML = `<div class="bloque"><h3>No hay nada por enviar</h3><p class="q">Ninguna solicitud autorizada está pendiente de enviarse a pagos.</p></div>`;
+    $('panelPie').innerHTML = ''; abrir(); return;
+  }
+  const total = lista.reduce((a,s)=>a+Number(s.total||0),0);
+  const cuerpo = cuerpoReporte(lista, l);
+  const asunto = `Pagos autorizados para el ${fDia(l.pago)} | ${lista.length} ${lista.length===1?'solicitud':'solicitudes'} por ${money(total)}`;
+  const conArchivos = lista.flatMap(s=>(s.adjuntos||[]).map(a=>({...a, folio:s.folio})));
+  $('panelCuerpo').innerHTML = `
+    <div class="bloque foco"><h3>Para mandarlo por correo</h3>
+      <p style="font-size:14px">1. Copia el concentrado y pégalo en el cuerpo del correo. 2. Descarga los archivos y adjúntalos. 3. Al enviarlo, márcalo como enviado aquí.</p>
+      <div class="acciones" style="margin-top:12px">
+        <button class="btn" data-ac="copiarReporte">Copiar concentrado</button>
+        <button class="btn claro" data-ac="copiarAsunto">Copiar asunto</button>
+        <button class="btn claro" data-ac="csvReporte">Descargar resumen en Excel</button>
+        <button class="btn claro" data-ac="imprimirReporte">Imprimir o guardar PDF</button>
+      </div>
+    </div>
+    ${conArchivos.length?`<div class="bloque"><h3>Archivos por adjuntar (${conArchivos.length})</h3>
+      <div class="archivos" id="archivosLote">${conArchivos.map(a=>`<a class="chip" href="#" data-ver-lote="${a.id}">${esc(a.folio)} · ${a.clase.toUpperCase()}<small>${esc(a.nombre)}</small></a>`).join('')}</div>
+      <p class="pista">Cada botón abre el archivo en otra pestaña para que lo guardes y lo adjuntes al correo.</p></div>`
+      :'<div class="bloque"><p class="q">Ninguna de estas solicitudes trae archivos adjuntos.</p></div>'}
+    <div class="bloque"><h3>Así se verá el correo</h3><div id="reporteHTML">${cuerpo}</div></div>`;
+  $('panelPie').innerHTML = `<div class="panel-pie"><button class="btn claro" data-ac="cerrar">Cerrar</button><button class="btn navy" data-ac="marcarEnviadas">Marcar como enviadas a pagos</button></div>`;
+  estado.reporte = {lista, asunto, cuerpo, total, pago:l.pago};
+  abrir();
+}
+
+async function copiarReporte(){
+  const cuerpo = estado.reporte?.cuerpo; if(!cuerpo) return;
+  try{
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([cuerpo], {type:'text/html'}),
+      'text/plain': new Blob([$('reporteHTML').innerText], {type:'text/plain'})
+    })]);
+    nota('Concentrado copiado. Pégalo en el correo con Ctrl + V.');
+  }catch(e){
+    const r = document.createRange(); r.selectNodeContents($('reporteHTML'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    nota('Selecciónalo y cópialo con Ctrl + C.');
+  }
+}
+function csvReporte(){
+  const lista = estado.reporte?.lista || [];
+  const col = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+  const filas = [['Folio','Tipo','Proveedor','RFC','No. factura','UUID','Concepto','Subtotal','IVA %','IVA','Retenciones','Total','NIVs','Solicita','Capturada','Autorizada','Prioridad'],
+    ...lista.map(s=>[s.folio, s.tipo==='factura'?'Factura':'Gasto', s.proveedor, s.rfc, s.factura_numero, s.factura_uuid, s.concepto,
+      s.subtotal, s.iva_pct, s.iva, s.retenciones, s.total, (s.nivs||[]).join(' '), s.solicitante_nombre,
+      fHora(s.creado), fHora(s.autorizado_en), s.urgencia])];
+  const csv = '\uFEFF' + filas.map(r=>r.map(col).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  const a = document.createElement('a');
+  a.href = url; a.download = `Resumen_pagos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+function imprimirReporte(){
+  const v = window.open('', '_blank');
+  if(!v){ nota('El navegador bloqueó la ventana. Permite las ventanas emergentes.'); return; }
+  v.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${esc(estado.reporte.asunto)}</title></head><body>${estado.reporte.cuerpo}</body></html>`);
+  v.document.close(); setTimeout(()=>v.print(), 400);
+}
+async function abrirArchivoLote(id){
+  const a = (estado.reporte?.lista||[]).flatMap(s=>s.adjuntos||[]).find(x=>x.id===id); if(!a) return;
+  const { data, error } = await core.storage.from(BUCKET).createSignedUrl(a.ruta, 3600);
+  if(error){ nota('No se pudo abrir el archivo: ' + error.message); return; }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+async function marcarEnviadas(){
+  const n = estado.reporte?.lista?.length || 0;
+  if(!confirm(`¿Marcar ${n} ${n===1?'solicitud':'solicitudes'} como enviadas a pagos? Hazlo solo después de mandar el correo.`)) return;
+  const { data, error } = await g.rpc('enviar_lote_manual');
+  if(error){ nota('No se pudo marcar el lote: ' + error.message); return; }
+  const r = Array.isArray(data) ? data[0] : data;
+  nota(`Lote enviado: ${r?.num_solicitudes ?? n} ${(r?.num_solicitudes ?? n)===1?'solicitud':'solicitudes'} por ${money(r?.total ?? 0)}.`);
+  await cargar(); cerrar();
+}
+
 /* ---------------- eventos ---------------- */
 document.addEventListener('click', async ev => {
+  const verLote = ev.target.closest('[data-ver-lote]');
+  if(verLote){ ev.preventDefault(); abrirArchivoLote(verLote.dataset.verLote); return; }
   const ver = ev.target.closest('[data-ver]');
   if(ver){ ev.preventDefault(); verArchivo(ver.dataset.ver); return; }
   const b = ev.target.closest('[data-ac]');
@@ -628,6 +775,11 @@ document.addEventListener('click', async ev => {
     if(ac==='corregir'){ const s = estado.lista.find(x=>x.id===estado.abierto?.id); if(s) nuevaSolicitud(s); }
     if(ac==='cancelar'){ if(confirm('¿Cancelar esta solicitud? Queda en el historial como cancelada.')) accion('cancelar'); }
     if(ac==='recordar') accion('recordar');
+    if(ac==='copiarReporte') copiarReporte();
+    if(ac==='copiarAsunto'){ navigator.clipboard.writeText(estado.reporte?.asunto||'').then(()=>nota('Asunto copiado.')).catch(()=>prompt('Copia el asunto:', estado.reporte?.asunto||'')); }
+    if(ac==='csvReporte') csvReporte();
+    if(ac==='imprimirReporte') imprimirReporte();
+    if(ac==='marcarEnviadas') marcarEnviadas();
     return;
   }
   const fila = ev.target.closest('tr.fila') || ev.target.closest('[data-id]');
@@ -659,10 +811,19 @@ document.addEventListener('keydown', ev => { if(ev.key==='Escape' && $('panel').
 $('telon').addEventListener('click', cerrar);
 $('cerrar').addEventListener('click', cerrar);
 $('nueva').addEventListener('click', () => nuevaSolicitud(null));
+$('concentrado').addEventListener('click', verConcentrado);
 $('q').addEventListener('input', e => { estado.q = e.target.value; pintar(); });
 $('fTipo').addEventListener('change', e => { estado.fTipo = e.target.value; pintar(); });
 $('fEstado').addEventListener('change', e => { estado.fEstado = e.target.value; pintar(); });
 $('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html'; });
+
+if(SOLO_FACTURAS){
+  document.title = 'Autorización de facturas · Plataforma HT';
+  $('titulo').textContent = 'Autorización de facturas';
+  $('subtitulo').textContent = 'Facturas de proveedores · corte lunes y miércoles a las 12:00';
+  [...$('fTipo').options].forEach(o => { if(o.value==='gasto') o.remove(); });
+  $('fTipo').options[0].textContent = 'Todas las facturas';
+}
 
 await cargar();
 </script>
