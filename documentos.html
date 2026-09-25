@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Control de equipos y expedientes · Plataforma HT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira:ital,wght@1,700;1,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ht.css?v=2026-09-25a">
+</head>
+<body>
+
+<header>
+  <div class="cinta"></div>
+  <div class="barra">
+    <div class="marca">Plataforma <span>HT</span></div>
+    <div class="rotulo"><b>HT RENT &gt;</b><span>ARRENDA Y CRECE</span></div>
+    <div class="quien">
+      <b id="nombreUsuario">—</b><br>
+      <span class="eyebrow" id="puestoUsuario"></span>
+    </div>
+    <button class="salir" id="salir">Salir</button>
+  </div>
+</header>
+
+<main>
+  <a class="migaja" href="index.html?v=2026-09-25a">← Volver a módulos</a>
+  <h1>Control de equipos y expedientes</h1>
+  <span class="eyebrow">Departamento de Documentos · expediente ligado al inventario</span>
+
+  <section>
+    <h2>Resumen</h2>
+    <div class="cifras" id="cifras"></div>
+  </section>
+
+  <section>
+    <div class="filtros">
+      <input id="q" placeholder="NIV, placa o cliente" spellcheck="false">
+      <select id="fPropiedad"><option value="">Toda la propiedad</option></select>
+      <select id="fPatio"><option value="">Todos los patios</option></select>
+      <select id="fDocs">
+        <option value="">Todo el checklist</option>
+        <option value="pend">Con documentos pendientes</option>
+        <option value="ok">Con expediente completo</option>
+      </select>
+      <select id="fVentana"><option value="">Toda ventana de verificación</option></select>
+      <button class="btn claro chico" id="limpiar">Limpiar</button>
+    </div>
+    <div class="resultados" id="lista"><p class="cargando">Cargando equipos…</p></div>
+  </section>
+</main>
+
+<div class="telon" id="telon"></div>
+<aside class="panel" id="panel" aria-hidden="true">
+  <div class="panel-cab"><h3 id="panelTitulo"></h3><button class="cerrar" id="cerrar" aria-label="Cerrar">×</button></div>
+  <div class="panel-cuerpo" id="panelCuerpo"></div>
+  <div id="panelPie"></div>
+</aside>
+<div class="nota" id="nota" role="status"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL  = 'https://ahfjstuwekcuxshclprl.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoZmpzdHV3ZWtjdXhzaGNscHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwNDg2MjYsImV4cCI6MjEwMzYyNDYyNn0.lf1uw8WHPRy21GuYlK9NzeI5JgJK2be1LrODq22CodM';
+const BUCKET = 'expedientes';
+const LIMITE = 100;
+
+const core = createClient(SUPABASE_URL, SUPABASE_ANON, { db:{ schema:'core' } });
+const doc  = core.schema('documentos');
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fDia = d => d ? new Date(String(d).length===10 ? d+'T12:00:00' : d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const fHora = d => d ? new Date(d).toLocaleString('es-MX',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+const kb = n => n>1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
+function nota(t){ const n=$('nota'); n.textContent=t; n.classList.add('on'); clearTimeout(nota._t); nota._t=setTimeout(()=>n.classList.remove('on'),4000); }
+
+const ESTADOS_DOC = {enorden:'En orden', pendiente:'Pendiente', na:'No aplica'};
+const st = { yo:null, lista:[], cat:{tipos:[],marcas:[],patios:[],docs:[],propiedad:[],operativo:[]}, abierto:null, ficha:null };
+
+/* ---------------- arranque ---------------- */
+const { data:{ session } } = await core.auth.getSession();
+if(!session){ location.href = 'index.html?v=2026-09-25a'; }
+const usuario = session.user;
+const { data: perfil } = await core.from('perfiles').select('nombre,puesto').eq('id', usuario.id).maybeSingle();
+$('nombreUsuario').textContent = perfil?.nombre || usuario.email;
+$('puestoUsuario').textContent = perfil?.puesto || '';
+st.yo = { id: usuario.id, nombre: perfil?.nombre || usuario.email };
+
+const [tipos, marcas, patios, docs, prop, oper] = await Promise.all([
+  core.from('tipos_equipo').select('id,nombre').order('nombre'),
+  core.from('marcas').select('id,nombre').order('nombre'),
+  core.from('patios').select('id,nombre').order('nombre'),
+  doc.from('catalogo').select('clave,nombre,orden').order('orden'),
+  core.from('estatus_propiedad').select('clave,nombre'),
+  core.from('estatus_operativo').select('clave,nombre')
+]);
+st.cat = { tipos:tipos.data||[], marcas:marcas.data||[], patios:patios.data||[],
+           docs:docs.data||[], propiedad:prop.data||[], operativo:oper.data||[] };
+
+$('fPropiedad').insertAdjacentHTML('beforeend', st.cat.propiedad.map(p=>`<option value="${esc(p.clave)}">${esc(p.nombre)}</option>`).join(''));
+$('fPatio').insertAdjacentHTML('beforeend', st.cat.patios.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join(''));
+$('fVentana').insertAdjacentHTML('beforeend', ['Ene-Abr','Mar-Jun','May-Ago','Jul-Oct','Sep-Dic']
+  .map(v=>`<option value="${v}">Verificación ${v}</option>`).join('') + '<option value="sin">Sin placa (anual)</option>');
+
+await cifras();
+await cargar();
+
+/* ---------------- resumen ---------------- */
+async function cifras(){
+  const [eq, pend, na, dig] = await Promise.all([
+    core.from('equipos').select('*',{count:'exact',head:true}).eq('activo',true),
+    doc.from('checklist').select('*',{count:'exact',head:true}).eq('estado','pendiente'),
+    doc.from('checklist').select('*',{count:'exact',head:true}).eq('estado','enorden'),
+    doc.from('expedientes').select('*',{count:'exact',head:true}).eq('expediente_digital',true)
+  ]);
+  const fmt = n => (n??0).toLocaleString('es-MX');
+  $('cifras').innerHTML = `
+    <div class="cifra"><div class="n">${fmt(eq.count)}</div><div class="t">equipos</div></div>
+    <div class="cifra urge"><div class="n">${fmt(pend.count)}</div><div class="t">documentos pendientes</div></div>
+    <div class="cifra"><div class="n">${fmt(na.count)}</div><div class="t">documentos en orden</div></div>
+    <div class="cifra"><div class="n">${fmt(dig.count)}</div><div class="t">expedientes digitalizados</div></div>`;
+}
+
+/* ---------------- lista ---------------- */
+async function cargar(){
+  $('lista').innerHTML = '<p class="cargando">Buscando…</p>';
+  let q = doc.from('v_expedientes').select('*').order('niv').limit(LIMITE);
+  const texto = $('q').value.trim();
+  if(texto.length >= 3){
+    const p = `%${texto}%`;
+    q = q.or(`niv.ilike.${p},placa.ilike.${p},cliente_actual.ilike.${p}`);
+  }
+  if($('fPropiedad').value) q = q.eq('estatus_propiedad', $('fPropiedad').value);
+  if($('fPatio').value)     q = q.eq('patio', st.cat.patios.find(p=>String(p.id)===$('fPatio').value)?.nombre || '');
+  if($('fDocs').value==='pend') q = q.gt('docs_pendientes', 0);
+  if($('fDocs').value==='ok')   q = q.eq('docs_pendientes', 0);
+  if($('fVentana').value==='sin') q = q.is('ventana_verificacion', null);
+  else if($('fVentana').value)    q = q.eq('ventana_verificacion', $('fVentana').value);
+
+  const { data, error } = await q;
+  if(error){ $('lista').innerHTML = `<p class="vacio">No se pudo leer: ${esc(error.message)}</p>`; return; }
+  st.lista = data || [];
+  if(!st.lista.length){ $('lista').innerHTML = '<p class="vacio">Ningún equipo coincide con los filtros.</p>'; return; }
+
+  $('lista').innerHTML = `<table><thead><tr>
+      <th>NIV</th><th>Placa</th><th>Tipo</th><th>Patio</th><th>Propiedad</th>
+      <th>Checklist</th><th>Verificación</th><th>Historial</th>
+    </tr></thead><tbody>${st.lista.map(e=>`
+      <tr class="fila" data-id="${e.equipo_id}">
+        <td class="niv"><b>${esc(e.niv)}</b>${e.anio?`<span class="sub">${e.anio}</span>`:''}</td>
+        <td class="niv">${esc(e.placa||'—')}</td>
+        <td>${esc(e.tipo||'—')}</td>
+        <td>${esc(e.patio||'—')}</td>
+        <td>${esc(e.estatus_propiedad||'—')}${e.cliente_actual?`<span class="sub">${esc(e.cliente_actual)}</span>`:''}</td>
+        <td>${e.docs_pendientes ? `<span class="sello mal">${e.docs_pendientes} pendientes</span>` : '<span class="sello ok">completo</span>'}
+            ${e.docs_en_orden?`<span class="sub">${e.docs_en_orden} en orden</span>`:''}</td>
+        <td>${e.ventana_verificacion ? esc(e.ventana_verificacion) : '<span class="sub">sin placa, anual</span>'}</td>
+        <td>${e.eventos_historial||0}${e.archivos?`<span class="sub">${e.archivos} archivo(s)</span>`:''}</td>
+      </tr>`).join('')}</tbody></table>
+    <p class="vacio">${st.lista.length===LIMITE ? `Mostrando los primeros ${LIMITE}. Afina la búsqueda o los filtros.` : st.lista.length+' equipo(s).'}</p>`;
+}
+
+/* ---------------- ficha ---------------- */
+function abrir(){ $('panel').classList.add('on'); $('telon').classList.add('on'); $('panel').setAttribute('aria-hidden','false'); }
+function cerrar(){ $('panel').classList.remove('on'); $('telon').classList.remove('on'); $('panel').setAttribute('aria-hidden','true'); st.abierto=null; }
+
+async function verFicha(equipoId){
+  st.abierto = equipoId;
+  $('panelTitulo').textContent = 'Cargando…';
+  $('panelCuerpo').innerHTML = '<p class="cargando">Abriendo expediente…</p>';
+  $('panelPie').innerHTML = '';
+  abrir();
+
+  const [eq, exp, chk, hist, arch] = await Promise.all([
+    core.from('equipos').select('*').eq('id', equipoId).single(),
+    doc.from('expedientes').select('*').eq('equipo_id', equipoId).maybeSingle(),
+    doc.from('checklist').select('*').eq('equipo_id', equipoId),
+    doc.from('historial').select('*').eq('equipo_id', equipoId).order('fecha', {ascending:false}),
+    doc.from('archivos').select('*').eq('equipo_id', equipoId).order('subido_en', {ascending:false})
+  ]);
+  if(eq.error){ $('panelCuerpo').innerHTML = `<p class="vacio">${esc(eq.error.message)}</p>`; return; }
+  const e = eq.data, x = exp.data || {}, lista = st.lista.find(l=>l.equipo_id===equipoId) || {};
+  st.ficha = { e, x, chk: chk.data||[], hist: hist.data||[], arch: arch.data||[] };
+
+  const opc = (arr, val, clave='id', texto='nombre') =>
+    `<option value=""></option>` + arr.map(o=>`<option value="${esc(o[clave])}" ${String(o[clave])===String(val)?'selected':''}>${esc(o[texto])}</option>`).join('');
+  const estadoChk = c => (st.ficha.chk.find(k=>k.documento===c)||{}).estado || 'pendiente';
+
+  $('panelTitulo').textContent = e.niv;
+  $('panelCuerpo').innerHTML = `
+    <div class="bloque foco">
+      <h3>Verificación fisicomecánica</h3>
+      <div class="importes">
+        <div><div class="g">${esc(lista.ventana_verificacion || 'Anual')}</div><div class="t">${e.placa?`ventana por el tercer dígito de ${esc(e.placa)}`:'sin placa: anual desde el alta'}</div></div>
+        <div><div class="v">${fDia(x.ultima_verificacion)}</div><div class="t">última verificación</div></div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Datos del equipo</h3>
+      <p class="pista" style="margin-bottom:12px">Lo que cambies aquí se actualiza en el inventario y queda registrado en la bitácora del equipo.</p>
+      <div class="campos">
+        <div class="campo"><span class="lbl">Placa</span><input id="ePlaca" value="${esc(e.placa)}"></div>
+        <div class="campo"><span class="lbl">Año</span><input id="eAnio" type="number" min="1980" max="2100" value="${e.anio ?? ''}"></div>
+        <div class="campo"><span class="lbl">Tipo</span><select id="eTipo">${opc(st.cat.tipos, e.tipo_id)}</select></div>
+        <div class="campo"><span class="lbl">Marca</span><select id="eMarca">${opc(st.cat.marcas, e.marca_id)}</select></div>
+        <div class="campo"><span class="lbl">Estatus de propiedad</span><select id="eProp">${opc(st.cat.propiedad, e.estatus_propiedad, 'clave')}</select></div>
+        <div class="campo"><span class="lbl">Estatus operativo</span><select id="eOper">${opc(st.cat.operativo, e.estatus_operativo, 'clave')}</select></div>
+        <div class="campo"><span class="lbl">Patio asignado</span><select id="ePatio">${opc(st.cat.patios, e.patio_id)}</select></div>
+        <div class="campo"><span class="lbl">Patio donde está</span><select id="ePatioF">${opc(st.cat.patios, e.patio_fisico_id)}</select></div>
+        <div class="campo ancho"><span class="lbl">Cliente actual</span><input id="eCliente" value="${esc(e.cliente_actual)}"></div>
+        <div class="campo ancho"><span class="lbl">Motivo del cambio (opcional)</span><input id="eNota" placeholder="Ej. placa corregida contra tarjeta de circulación"></div>
+      </div>
+      <div class="acciones" style="margin-top:12px"><button class="btn" data-ac="guardarEquipo">Guardar cambios del equipo</button></div>
+    </div>
+
+    <div class="bloque">
+      <h3>Checklist de documentos</h3>
+      <div class="campos">
+        ${st.cat.docs.map(c=>`<div class="campo"><span class="lbl">${esc(c.nombre)}</span>
+          <select data-chk="${esc(c.clave)}">${Object.entries(ESTADOS_DOC).map(([k,v])=>`<option value="${k}" ${estadoChk(c.clave)===k?'selected':''}>${v}</option>`).join('')}</select></div>`).join('')}
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Expediente</h3>
+      <div class="campos">
+        <div class="campo"><span class="lbl">Número de contrato</span><input id="xContrato" value="${esc(x.numero_contrato)}"></div>
+        <div class="campo"><span class="lbl">Gestor del trámite</span><input id="xGestor" value="${esc(x.gestor)}"></div>
+        <div class="campo"><span class="lbl">Trámite en curso</span><input id="xTramite" value="${esc(x.tramite)}"></div>
+        <div class="campo"><span class="lbl">Archivero y cajón</span><input id="xArchivero" value="${esc(x.archivero)}" placeholder="Ej. Archivero A · Cajón 3"></div>
+        <div class="campo"><span class="lbl">Folio de holograma</span><input id="xHolograma" value="${esc(x.folio_holograma)}"></div>
+        <div class="campo"><span class="lbl">Folio de doble articulado</span><input id="xDoble" value="${esc(x.folio_doble_articulado)}"></div>
+        <div class="campo"><span class="lbl">Última verificación</span><input id="xVerif" type="date" value="${esc(x.ultima_verificacion)}"></div>
+        <div class="campo"><span class="lbl">Baja de documentos</span><input id="xBaja" type="date" value="${esc(x.fecha_baja_documentos)}"></div>
+        <div class="campo"><span class="lbl">Documentos que se entregan</span><input id="xVentaDocs" value="${esc(x.venta_documentos)}" placeholder="Del cliente o de la empresa"></div>
+        <div class="campo"><span class="lbl">Fecha de cotejo</span><input id="xCotejo" type="date" value="${esc(x.fecha_cotejo)}"></div>
+        <div class="campo"><span class="lbl">Fecha de envío al cliente</span><input id="xEnvio" type="date" value="${esc(x.fecha_envio_docs)}"></div>
+        <div class="campo ancho"><label class="opcion"><input type="checkbox" id="xDigital" ${x.expediente_digital?'checked':''}> Expediente digitalizado</label></div>
+        <div class="campo ancho"><label class="opcion"><input type="checkbox" id="xCotejados" ${x.documentos_cotejados?'checked':''}> Documentos cotejados</label></div>
+        <div class="campo ancho"><label class="opcion"><input type="checkbox" id="xEnviados" ${x.docs_enviados?'checked':''}> Documentos enviados al cliente</label></div>
+        <div class="campo ancho"><span class="lbl">Notas</span><textarea id="xNotas">${esc(x.notas)}</textarea></div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h3>Archivos del expediente</h3>
+      <div class="campos">
+        <div class="campo"><span class="lbl">Documento</span><select id="aTipo">${st.cat.docs.map(c=>`<option value="${esc(c.clave)}">${esc(c.nombre)}</option>`).join('')}<option value="">Otro</option></select></div>
+        <label class="soltar" id="cajaArchivo"><input type="file" id="upArchivo" accept="image/*,application/pdf" capture="environment"><b>Subir o escanear</b><span>Elige un archivo o toma la foto con el celular.</span></label>
+      </div>
+      <div class="archivos" style="margin-top:12px">${st.ficha.arch.length
+        ? st.ficha.arch.map(a=>`<a class="chip" href="#" data-ver="${a.id}">${esc(st.cat.docs.find(c=>c.clave===a.documento)?.nombre || 'Archivo')}<small>${esc(a.nombre)}${a.tam_bytes?`, ${kb(a.tam_bytes)}`:''}</small></a>`).join('')
+        : '<p class="pista">Sin archivos todavía.</p>'}</div>
+    </div>
+
+    <div class="bloque">
+      <h3>Historial del equipo (${st.ficha.hist.length})</h3>
+      <div class="acciones" style="margin-bottom:12px"><button class="btn claro chico" data-ac="nuevoEvento">+ Agregar movimiento</button></div>
+      <div id="formEvento"></div>
+      ${st.ficha.hist.length ? `<div class="resultados"><table><thead><tr>
+          <th>Fecha</th><th>Evento</th><th>Cliente</th><th>Folio</th><th>Patio</th><th>Ejecutivo</th><th>Origen</th>
+        </tr></thead><tbody>${st.ficha.hist.map(h=>`<tr>
+          <td class="niv">${fDia(h.fecha)}</td><td>${esc(h.evento||'—')}</td><td>${esc(h.cliente||'—')}</td>
+          <td class="niv">${esc(h.folio||'—')}</td><td>${esc(h.patio||'—')}</td><td>${esc(h.ejecutivo||'—')}</td>
+          <td><span class="sello gris">${esc(h.fuente||'Manual')}</span></td>
+        </tr>`).join('')}</tbody></table></div>` : '<p class="pista">Sin movimientos registrados.</p>'}
+    </div>`;
+  $('panelPie').innerHTML = `<div class="panel-pie"><button class="btn claro" data-ac="cerrar">Cerrar</button><button class="btn" data-ac="guardarExpediente" id="btnGuardar">Guardar expediente</button></div>`;
+}
+
+/* ---------------- guardar ---------------- */
+async function guardarEquipo(){
+  const e = st.ficha.e;
+  const num = v => v==='' ? null : Number(v);
+  const { error } = await core.rpc('actualizar_equipo', {
+    p_equipo_id: e.id, p_modulo: 'documentos',
+    p_placa: $('ePlaca').value.trim().toUpperCase() || null,
+    p_tipo_id: num($('eTipo').value), p_marca_id: num($('eMarca').value), p_anio: num($('eAnio').value),
+    p_estatus_propiedad: $('eProp').value || null, p_estatus_operativo: $('eOper').value || null,
+    p_patio_id: num($('ePatio').value), p_patio_fisico_id: num($('ePatioF').value),
+    p_cliente_actual: $('eCliente').value.trim() || null,
+    p_nota: $('eNota').value.trim() || null
+  });
+  if(error){ nota('No se pudo guardar: ' + error.message); return; }
+  nota('Datos del equipo actualizados en el inventario.');
+  await cargar(); verFicha(e.id);
+}
+
+async function guardarExpediente(){
+  const id = st.ficha.e.id;
+  const txt = v => { const n = $(v)?.value?.trim(); return n || null; };
+  const btn = $('btnGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    const { error: e1 } = await doc.from('expedientes').upsert({
+      equipo_id: id,
+      numero_contrato: txt('xContrato'), gestor: txt('xGestor'), tramite: txt('xTramite'),
+      archivero: txt('xArchivero'), folio_holograma: txt('xHolograma'), folio_doble_articulado: txt('xDoble'),
+      ultima_verificacion: txt('xVerif'), fecha_baja_documentos: txt('xBaja'),
+      venta_documentos: txt('xVentaDocs'), fecha_cotejo: txt('xCotejo'), fecha_envio_docs: txt('xEnvio'),
+      expediente_digital: $('xDigital').checked, documentos_cotejados: $('xCotejados').checked,
+      docs_enviados: $('xEnviados').checked, notas: txt('xNotas'),
+      actualizado_en: new Date().toISOString(), actualizado_por: st.yo.id
+    });
+    if(e1) throw e1;
+    const filas = [...document.querySelectorAll('[data-chk]')].map(s => ({
+      equipo_id: id, documento: s.dataset.chk, estado: s.value,
+      actualizado_en: new Date().toISOString(), actualizado_por: st.yo.id
+    }));
+    const { error: e2 } = await doc.from('checklist').upsert(filas, { onConflict: 'equipo_id,documento' });
+    if(e2) throw e2;
+    nota('Expediente guardado.');
+    await Promise.all([cifras(), cargar()]);
+    verFicha(id);
+  }catch(err){ nota('No se pudo guardar: ' + (err.message||err)); }
+  finally{ if($('btnGuardar')){ btn.disabled=false; btn.textContent='Guardar expediente'; } }
+}
+
+function formEvento(){
+  $('formEvento').innerHTML = `<div class="bloque" style="background:var(--bg)">
+    <div class="campos">
+      <div class="campo"><span class="lbl">Fecha</span><input id="hFecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="campo"><span class="lbl">Evento</span><select id="hEvento"><option>Entrega</option><option>Devolución</option><option>Venta</option><option>Cambio de placa</option><option>Otro</option></select></div>
+      <div class="campo"><span class="lbl">Cliente</span><input id="hCliente"></div>
+      <div class="campo"><span class="lbl">Folio o contrato</span><input id="hFolio"></div>
+      <div class="campo"><span class="lbl">Patio</span><input id="hPatio"></div>
+      <div class="campo"><span class="lbl">Ejecutivo</span><input id="hEjecutivo"></div>
+      <div class="campo ancho"><span class="lbl">Motivo o notas</span><input id="hMotivo"></div>
+    </div>
+    <div class="acciones" style="margin-top:10px"><button class="btn chico" data-ac="guardarEvento">Agregar</button><button class="btn claro chico" data-ac="cancelarEvento">Cancelar</button></div>
+  </div>`;
+}
+async function guardarEvento(){
+  const f = st.ficha.e;
+  const { error } = await doc.from('historial').insert({
+    equipo_id: f.id, niv: f.niv, fecha: $('hFecha').value || null, evento: $('hEvento').value,
+    cliente: $('hCliente').value.trim() || null, folio: $('hFolio').value.trim() || null,
+    patio: $('hPatio').value.trim() || null, ejecutivo: $('hEjecutivo').value.trim() || null,
+    motivo: $('hMotivo').value.trim() || null, fuente: 'Manual', capturado_por: st.yo.nombre
+  });
+  if(error){ nota('No se pudo agregar: ' + error.message); return; }
+  nota('Movimiento agregado al historial.');
+  verFicha(f.id);
+}
+
+async function subirArchivo(file){
+  const id = st.ficha.e.id, tipo = $('aTipo').value || null;
+  const ruta = `${id}/${Date.now()}-${file.name.replace(/[^\w.\-]/g,'_')}`;
+  nota('Subiendo ' + file.name + '…');
+  const { error } = await core.storage.from(BUCKET).upload(ruta, file, { upsert:false });
+  if(error){ nota('No se pudo subir: ' + error.message); return; }
+  await doc.from('archivos').insert({ equipo_id:id, documento:tipo, nombre:file.name, ruta, tam_bytes:file.size });
+  nota('Archivo agregado al expediente.');
+  verFicha(id);
+}
+async function verArchivo(idArch){
+  const a = st.ficha.arch.find(x=>x.id===idArch); if(!a) return;
+  const { data, error } = await core.storage.from(BUCKET).createSignedUrl(a.ruta, 3600);
+  if(error){ nota('No se pudo abrir: ' + error.message); return; }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+/* ---------------- eventos ---------------- */
+document.addEventListener('click', async ev => {
+  const ver = ev.target.closest('[data-ver]');
+  if(ver){ ev.preventDefault(); verArchivo(ver.dataset.ver); return; }
+  const b = ev.target.closest('[data-ac]');
+  if(b){
+    ev.preventDefault();
+    const a = b.dataset.ac;
+    if(a==='cerrar') cerrar();
+    if(a==='guardarEquipo') guardarEquipo();
+    if(a==='guardarExpediente') guardarExpediente();
+    if(a==='nuevoEvento') formEvento();
+    if(a==='cancelarEvento') $('formEvento').innerHTML='';
+    if(a==='guardarEvento') guardarEvento();
+    return;
+  }
+  const fila = ev.target.closest('tr.fila');
+  if(fila) verFicha(fila.dataset.id);
+});
+document.addEventListener('change', ev => { if(ev.target.id==='upArchivo' && ev.target.files[0]) subirArchivo(ev.target.files[0]); });
+document.addEventListener('keydown', ev => { if(ev.key==='Escape' && $('panel').classList.contains('on')) cerrar(); });
+$('telon').addEventListener('click', cerrar);
+$('cerrar').addEventListener('click', cerrar);
+let t; $('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cargar, 400); });
+['fPropiedad','fPatio','fDocs','fVentana'].forEach(id => $(id).addEventListener('change', cargar));
+$('limpiar').addEventListener('click', () => { $('q').value=''; ['fPropiedad','fPatio','fDocs','fVentana'].forEach(id=>$(id).value=''); cargar(); });
+$('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html?v=2026-09-25a'; });
+</script>
+</body>
+</html>
