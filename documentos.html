@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Saira:ital,wght@1,700;1,800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="ht.css?v=2026-09-25a">
+<link rel="stylesheet" href="ht.css?v=2026-09-25b">
 </head>
 <body>
 
@@ -28,7 +28,7 @@
 </header>
 
 <main>
-  <a class="migaja" href="index.html?v=2026-09-25a">← Volver a módulos</a>
+  <a class="migaja" href="index.html?v=2026-09-25b">← Volver a módulos</a>
   <h1>Control de equipos y expedientes</h1>
   <span class="eyebrow">Departamento de Documentos · expediente ligado al inventario</span>
 
@@ -85,7 +85,7 @@ const st = { yo:null, lista:[], cat:{tipos:[],marcas:[],patios:[],docs:[],propie
 
 /* ---------------- arranque ---------------- */
 const { data:{ session } } = await core.auth.getSession();
-if(!session){ location.href = 'index.html?v=2026-09-25a'; }
+if(!session){ location.href = 'index.html?v=2026-09-25b'; }
 const usuario = session.user;
 const { data: perfil } = await core.from('perfiles').select('nombre,puesto').eq('id', usuario.id).maybeSingle();
 $('nombreUsuario').textContent = perfil?.nombre || usuario.email;
@@ -392,7 +392,7 @@ $('cerrar').addEventListener('click', cerrar);
 let t; $('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cargar, 400); });
 ['fPropiedad','fPatio','fDocs','fVentana'].forEach(id => $(id).addEventListener('change', cargar));
 $('limpiar').addEventListener('click', () => { $('q').value=''; ['fPropiedad','fPatio','fDocs','fVentana'].forEach(id=>$(id).value=''); cargar(); });
-$('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html?v=2026-09-25a'; });
+$('salir').addEventListener('click', async () => { await core.auth.signOut(); location.href = 'index.html?v=2026-09-25b'; });
 </script>
 </body>
 </html>
